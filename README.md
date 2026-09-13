@@ -41,6 +41,38 @@ Everything is infrastructure-as-code in [`deploy/template.yaml`](deploy/template
 
 ---
 
+## Screenshots
+
+All screenshots come from the live deployment in AWS `af-south-1`. The providers shown are the built-in sample data.
+
+### The app
+
+| AI search: procedure + place + budget in one query | Provider page with services and prices |
+|---|---|
+| ![AI search](docs/screenshots/02-ai-search.png) | ![Provider page](docs/screenshots/04-provider-page.png) |
+| **Landing page** | **Search results with map** |
+| ![Home](docs/screenshots/01-home.png) | ![MRI search](docs/screenshots/03-search-mri.png) |
+| **Mobile** | **REST API docs** |
+| ![Mobile search](docs/screenshots/07-mobile-search.png) | ![API docs](docs/screenshots/06-api-docs.png) |
+
+### Running on AWS
+
+| CloudFormation stack (infrastructure-as-code) | CloudWatch dashboard |
+|---|---|
+| ![CloudFormation resources](docs/screenshots/aws-01-cloudformation-resources.png) | ![CloudWatch dashboard](docs/screenshots/aws-05-cloudwatch-dashboard.png) |
+| **Lambda function behind API Gateway** | **Lambda monitoring** |
+| ![Lambda web function](docs/screenshots/aws-02-lambda-web-function.png) | ![Lambda monitoring](docs/screenshots/aws-03-lambda-monitoring.png) |
+| **API Gateway HTTP API** | **CloudWatch alarms** |
+| ![API Gateway](docs/screenshots/aws-04-api-gateway.png) | ![Alarms](docs/screenshots/aws-06-cloudwatch-alarms.png) |
+| **EventBridge daily Google sync** | **Scheduled Lambda** |
+| ![EventBridge rule](docs/screenshots/aws-07-eventbridge-schedule.png) | ![Google sync Lambda](docs/screenshots/aws-08-lambda-google-sync.png) |
+| **Encrypted, versioned S3 bucket** | **Secrets Manager** |
+| ![S3 bucket](docs/screenshots/aws-09-s3-uploads-bucket.png) | ![Secrets Manager](docs/screenshots/aws-10-secrets-manager.png) |
+
+More detail in [docs/aws-deployment.md](docs/aws-deployment.md).
+
+---
+
 ## Features
 
 **Customers**

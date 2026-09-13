@@ -39,6 +39,23 @@ flowchart LR
 | **Amazon SNS** | Sends alarm notifications by email. |
 | **AWS IAM** | Least-privilege roles generated per function (read two secrets, write to one bucket, write logs/traces). |
 
+### In the AWS console
+
+These are captured from the live `costcare-prod` stack in `af-south-1` using
+[`deploy/console_screenshots.py`](../deploy/console_screenshots.py). That script signs in with a temporary
+read-only session and cannot read secret values.
+
+![CloudFormation stack resources](screenshots/aws-01-cloudformation-resources.png)
+![CloudWatch dashboard](screenshots/aws-05-cloudwatch-dashboard.png)
+![Lambda web function with API Gateway trigger](screenshots/aws-02-lambda-web-function.png)
+![Lambda monitoring](screenshots/aws-03-lambda-monitoring.png)
+![API Gateway HTTP API](screenshots/aws-04-api-gateway.png)
+![CloudWatch alarms](screenshots/aws-06-cloudwatch-alarms.png)
+![EventBridge daily schedule](screenshots/aws-07-eventbridge-schedule.png)
+![Google sync Lambda](screenshots/aws-08-lambda-google-sync.png)
+![S3 uploads bucket](screenshots/aws-09-s3-uploads-bucket.png)
+![Secrets Manager](screenshots/aws-10-secrets-manager.png)
+
 The database is **Supabase Postgres**, reached over TLS from Lambda. Lambda doesn't run inside a VPC, so it
 doesn't need a NAT gateway, which keeps costs close to zero.
 
