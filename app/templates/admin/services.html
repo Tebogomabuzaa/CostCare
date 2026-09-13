@@ -1,0 +1,46 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Service catalogue</h1>
+    <p class="muted">Services shared by all providers. <strong>Keywords</strong> (synonyms, symptoms, abbreviations) help the AI search match what people type.</p>
+  </div>
+</div>
+
+<form class="card form-row" method="post" action="/admin/services">
+  <label class="field grow"><span>New service</span><input name="name" required placeholder="e.g. Colonoscopy"></label>
+  <label class="field"><span>Category</span><select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}<option>General</option></select></label>
+  <label class="field grow"><span>Keywords</span><input name="keywords" placeholder="scope, bowel screening, gastro"></label>
+  <button class="btn btn-primary">{{ icon("plus") }} Add</button>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Service</th><th>Category</th><th>Keywords</th><th>Providers</th><th></th></tr></thead>
+      <tbody>
+      {% for s, count in rows %}
+      <tr>
+        <td><input form="s{{ s.id }}" name="name" value="{{ s.name }}" class="input-sm" required aria-label="Name"></td>
+        <td>
+          <select form="s{{ s.id }}" name="category" class="input-sm" aria-label="Category">
+            {% for c in categories + ['General'] %}<option {% if c == s.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+            {% if s.category not in categories and s.category != 'General' %}<option selected>{{ s.category }}</option>{% endif %}
+          </select>
+        </td>
+        <td><input form="s{{ s.id }}" name="keywords" value="{{ s.keywords }}" class="input-sm input-wide" aria-label="Keywords"></td>
+        <td>{{ count }}</td>
+        <td class="row-actions">
+          <form id="s{{ s.id }}" method="post" action="/admin/services/{{ s.id }}"><button class="btn btn-outline btn-sm">Save</button></form>
+          {% if not count %}
+          <form method="post" action="/admin/services/{{ s.id }}/delete" data-confirm="Delete {{ s.name }}?"><button class="btn btn-ghost btn-sm" aria-label="Delete">{{ icon("trash") }}</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Providers & prices</h1>
+    <p class="muted">{{ rows|length }} provider{{ 's' if rows|length != 1 }}</p>
+  </div>
+  <div class="btn-row">
+    <a class="btn btn-outline" href="/admin/import">{{ icon("upload") }} Import Excel</a>
+    <a class="btn btn-primary" href="/admin/providers/new">{{ icon("plus") }} Add provider</a>
+  </div>
+</div>
+
+<form class="card filter-bar" method="get">
+  <input name="q" value="{{ q }}" placeholder="Search by name or address" aria-label="Search providers">
+  <select name="city" aria-label="City">
+    <option value="">All cities</option>
+    {% for c in cities %}<option {% if c == city %}selected{% endif %}>{{ c }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-outline">Filter</button>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Provider</th><th>City</th><th>Services</th><th>Rating</th><th>Google profile</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for p, count in rows %}
+      <tr>
+        <td>
+          <a href="/admin/providers/{{ p.id }}"><strong>{{ p.name }}</strong></a>
+          <div class="small muted">{{ p.provider_type }}</div>
+        </td>
+        <td>{{ p.city or '—' }}</td>
+        <td>{{ count }}</td>
+        <td>{% if p.rating %}★ {{ p.rating }} <span class="muted small">({{ p.review_count }})</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>
+          {% if p.google_sync_error %}<span class="badge badge-error" title="{{ p.google_sync_error }}">Sync error</span>
+          {% elif p.google_place_id %}<span class="badge badge-verified">Linked · {{ p.google_synced_at|ago }}</span>
+          {% elif p.google_profile_url %}<span class="badge badge-warning">Not synced</span>
+          {% else %}<span class="muted small">Not linked</span>{% endif %}
+        </td>
+        <td>
+          {% if not p.is_active %}<span class="badge">Hidden</span>{% endif %}
+          {% if p.is_partner %}<span class="badge badge-partner">Partner</span>{% endif %}
+          {% if p.is_demo %}<span class="badge badge-demo">Sample</span>{% endif %}
+        </td>
+        <td class="row-actions"><a class="btn btn-outline btn-sm" href="/admin/providers/{{ p.id }}">Edit prices</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">No providers found. <a href="/admin/providers/new">Add one</a> or <a href="/admin/import">import a spreadsheet</a>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

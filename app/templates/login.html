@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Log in | CostCare{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <h1>Welcome back</h1>
+    <p class="muted">Log in to see saved providers, cost plans and price alerts.</p>
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email" autofocus></label>
+      <label class="field"><span>Password</span><input name="password" type="password" required autocomplete="current-password"></label>
+      <button class="btn btn-primary btn-block btn-lg">Log in</button>
+    </form>
+    <p class="small muted center">New to CostCare? <a href="/signup">Create a free account</a></p>
+  </section>
+</div>
+{% endblock %}

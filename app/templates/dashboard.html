@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon, stars %}
+{% block title %}My dashboard | CostCare{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="container dash-head">
+    <div>
+      <h1>Hi {{ user.name or 'traveller' }} 👋</h1>
+      <p class="muted">Plan your healthcare costs{% if user.preferred_city %} in {{ user.preferred_city }}{% endif %} and stay on top of price changes.</p>
+    </div>
+    <a class="btn btn-primary" href="/find">{{ icon("search") }} Find prices</a>
+  </div>
+</section>
+
+<div class="container">
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-label">{{ icon("heart") }} Saved providers</span><strong>{{ favorites|length }}</strong></div>
+    <div class="stat"><span class="stat-label">{{ icon("calendar") }} Planned costs</span><strong>{{ price_range(totals.planned_min, totals.planned_max) if totals.planned_max else 'R0' }}</strong></div>
+    <div class="stat"><span class="stat-label">{{ icon("wallet") }} Paid so far</span><strong>{{ totals.paid|zar }}</strong></div>
+    <div class="stat"><span class="stat-label">{{ icon("bell") }} Unread updates</span><strong>{{ unread_count }}</strong></div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="dash-main">
+      <section class="card" id="costs">
+        <div class="card-head">
+          <h2>{{ icon("wallet") }} Cost tracker</h2>
+          <span class="muted small">Planned treatments & payments</span>
+        </div>
+        {% if planned %}
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Treatment</th><th>Estimate</th><th>Current price</th><th>Date</th><th>Status / paid</th><th></th></tr></thead>
+            <tbody>
+            {% for p in planned %}
+            <tr class="{{ 'row-muted' if p.status == 'paid' }}">
+              <td>
+                <strong>{{ p.label }}</strong>
+                {% if p.listing %}<div class="small"><a href="/providers/{{ p.listing.provider.slug }}">View provider</a></div>{% endif %}
+              </td>
+              <td>{{ price_range(p.estimated_min, p.estimated_max) }}</td>
+              <td>
+                {% if p.listing %}
+                  {% set changed = (p.listing.price_min - p.estimated_min)|abs > 0.5 or (p.listing.price_max - p.estimated_max)|abs > 0.5 %}
+                  <span class="{{ 'price-changed' if changed }}">{{ price_range(p.listing.price_min, p.listing.price_max) }}</span>
+                  {% if changed %}<div class="small muted">Changed since you saved</div>{% endif %}
+                {% else %}<span class="muted">—</span>{% endif %}
+              </td>
+              <td><input form="plan{{ p.id }}" type="date" name="planned_date" value="{{ p.planned_date }}" class="input-sm"></td>
+              <td>
+                <div class="inline-fields">
+                  <select form="plan{{ p.id }}" name="status" class="input-sm">
+                    <option value="planned" {% if p.status == 'planned' %}selected{% endif %}>Planned</option>
+                    <option value="paid" {% if p.status == 'paid' %}selected{% endif %}>Paid</option>
+                  </select>
+                  <input form="plan{{ p.id }}" name="actual_cost" placeholder="Actual R" inputmode="decimal" class="input-sm num" value="{{ '%.0f'|format(p.actual_cost) if p.actual_cost is not none }}">
+                </div>
+              </td>
+              <td class="row-actions">
+                <form id="plan{{ p.id }}" method="post" action="/dashboard/planned/{{ p.id }}"><button class="btn btn-outline btn-sm">Save</button></form>
+                <form method="post" action="/dashboard/planned/{{ p.id }}/delete" data-confirm="Remove this item?"><button class="btn btn-ghost btn-sm" aria-label="Remove">{{ icon("trash") }}</button></form>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state small">
+          <p>No planned treatments yet. Use <strong>+ Cost plan</strong> on any price to start budgeting.</p>
+        </div>
+        {% endif %}
+        <details class="add-inline">
+          <summary class="btn btn-ghost btn-sm">{{ icon("plus") }} Add a custom expense</summary>
+          <form method="post" action="/dashboard/planned" class="form-row">
+            <label class="field grow"><span>Description</span><input name="label" required placeholder="e.g. Follow-up physio"></label>
+            <label class="field"><span>Est. min (R)</span><input name="estimated_min" inputmode="decimal" class="num"></label>
+            <label class="field"><span>Est. max (R)</span><input name="estimated_max" inputmode="decimal" class="num"></label>
+            <label class="field"><span>Date</span><input type="date" name="planned_date"></label>
+            <button class="btn btn-primary">Add</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="card" id="saved">
+        <div class="card-head"><h2>{{ icon("heart") }} Saved providers</h2></div>
+        {% if favorites %}
+        <div class="mini-card-grid">
+          {% for f in favorites %}{% set p = f.provider %}
+          <article class="mini-card">
+            <div class="mini-card-top">
+              <a href="/providers/{{ p.slug }}"><strong>{{ p.name }}</strong></a>
+              <button type="button" class="icon-btn fav-btn is-active" data-fav="{{ p.id }}" aria-pressed="true" aria-label="Remove from saved">{{ icon("heart") }}</button>
+            </div>
+            <span class="muted small">{{ p.provider_type }} · {{ p.city }}</span>
+            {% if p.rating %}<span class="small">{{ stars(p.rating) }} {{ p.rating }}</span>{% endif %}
+            <span class="small muted">{{ p.services|length }} services listed</span>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty small">Tap the heart on any provider to save it here and get notified when prices change.</p>
+        {% endif %}
+      </section>
+
+      <section class="card" id="recent">
+        <div class="card-head"><h2>{{ icon("clock") }} Recently viewed</h2></div>
+        {% if recent %}
+        <ul class="link-list">
+          {% for r in recent %}
+          <li><a href="/providers/{{ r.provider.slug }}">{{ r.provider.name }}</a><span class="muted small">{{ r.provider.city }} · {{ r.viewed_at|ago }}</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="empty small">Providers you view will appear here.</p>{% endif %}
+      </section>
+    </div>
+
+    <aside class="dash-side">
+      <section class="card" id="notifications">
+        <div class="card-head">
+          <h2>{{ icon("bell") }} Notifications</h2>
+          {% if unread_count %}
+          <form method="post" action="/dashboard/notifications/read"><button class="btn btn-ghost btn-sm">Mark all read</button></form>
+          {% endif %}
+        </div>
+        {% if notifications %}
+        <ul class="notif-list">
+          {% for n in notifications %}
+          <li class="{{ 'unread' if not n.is_read }}">
+            <a href="{{ n.link or '#' }}"><strong>{{ n.title }}</strong></a>
+            <p class="small">{{ n.body }}</p>
+            <span class="small muted">{{ n.created_at|ago }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="empty small">Price changes for saved providers and planned treatments will show here.</p>{% endif %}
+      </section>
+
+      <section class="card" id="settings">
+        <div class="card-head"><h2>Profile settings</h2></div>
+        <form method="post" action="/dashboard/profile" class="stack">
+          <label class="field"><span>Name</span><input name="name" value="{{ user.name }}"></label>
+          <label class="field"><span>Email</span><input value="{{ user.email }}" disabled></label>
+          <label class="field"><span>Preferred country</span>
+            <select name="preferred_country"><option selected>South Africa</option></select>
+          </label>
+          <label class="field"><span>Preferred city</span>
+            <select name="preferred_city">
+              <option value="">No preference</option>
+              {% for c in cities %}<option {% if c == user.preferred_city %}selected{% endif %}>{{ c }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" name="notify_price_changes" {% if user.notify_price_changes %}checked{% endif %}> Notify me about price changes</label>
+          <label class="check"><input type="checkbox" name="notify_promotions" {% if user.notify_promotions %}checked{% endif %}> Provider promotions</label>
+          <button class="btn btn-primary">Save settings</button>
+        </form>
+        <form method="post" action="/logout" class="logout-form"><button class="btn btn-ghost btn-sm btn-block">Log out</button></form>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | CostCare{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <section class="card auth-card center">
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ message }}</p>
+    <a class="btn btn-primary" href="/">Back to home</a>
+  </section>
+</div>
+{% endblock %}

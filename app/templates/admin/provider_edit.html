@@ -1,0 +1,157 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon, stars %}
+{% block title %}{{ provider.name if provider else "New provider" }} · Admin | CostCare{% endblock %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <a href="/admin/providers" class="small">← All providers</a>
+    <h1>{{ provider.name if provider else "Add a provider" }}</h1>
+    {% if provider %}
+    <p class="muted">{{ provider.provider_type }}{% if provider.city %} · {{ provider.city }}{% endif %} ·
+      <a href="/providers/{{ provider.slug }}" target="_blank" rel="noopener">View public page ↗</a></p>
+    {% endif %}
+  </div>
+</div>
+
+{% if provider %}
+<nav class="subnav">
+  <a href="#prices">Services & prices ({{ listings|length }})</a>
+  <a href="#google">Google profile</a>
+  <a href="#details">Details</a>
+</nav>
+
+<section class="card" id="prices">
+  <div class="card-head">
+    <h2>Services & prices</h2>
+    <a class="btn btn-outline btn-sm" href="/admin/import">{{ icon("upload") }} Bulk update via Excel</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table price-table">
+      <thead><tr><th>Service</th><th>Min (R)</th><th>Max (R)</th><th>Notes for patients</th><th>Live</th><th>Updated</th><th></th></tr></thead>
+      <tbody>
+      {% for l in listings %}
+      <tr class="{{ 'row-muted' if not l.is_available }}">
+        <td><strong>{{ l.service.name }}</strong><div class="muted small">{{ l.service.category }}</div></td>
+        <td><input form="l{{ l.id }}" name="price_min" value="{{ '%.0f'|format(l.price_min) }}" inputmode="decimal" class="input-sm num" aria-label="Minimum price"></td>
+        <td><input form="l{{ l.id }}" name="price_max" value="{{ '%.0f'|format(l.price_max) }}" inputmode="decimal" class="input-sm num" aria-label="Maximum price"></td>
+        <td><input form="l{{ l.id }}" name="notes" value="{{ l.notes }}" class="input-sm" aria-label="Notes"></td>
+        <td><input form="l{{ l.id }}" type="checkbox" name="is_available" {% if l.is_available %}checked{% endif %} aria-label="Visible to customers"></td>
+        <td class="small muted nowrap">{{ l.price_updated_at|ago }}<div>via {{ l.source }}</div></td>
+        <td class="row-actions">
+          <form id="l{{ l.id }}" method="post" action="/admin/listings/{{ l.id }}"><button class="btn btn-primary btn-sm">Save</button></form>
+          <form method="post" action="/admin/listings/{{ l.id }}/delete" data-confirm="Remove {{ l.service.name }} from this provider?">
+            <button class="btn btn-ghost btn-sm" aria-label="Remove {{ l.service.name }}">{{ icon("trash") }}</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">No services yet — add the first one below.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form class="add-price" method="post" action="/admin/providers/{{ provider.id }}/prices">
+    <h3>{{ icon("plus") }} Add a service price</h3>
+    <div class="form-row">
+      <label class="field grow"><span>Service</span><input name="service_name" list="service-options" required placeholder="Start typing, e.g. MRI scan"></label>
+      <label class="field"><span>Category</span>
+        <select name="category"><option value="">Auto</option>{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label class="field"><span>Min (R)</span><input name="price_min" required inputmode="decimal" class="num"></label>
+      <label class="field"><span>Max (R)</span><input name="price_max" inputmode="decimal" class="num" placeholder="optional"></label>
+      <label class="field grow"><span>Notes</span><input name="notes" placeholder="e.g. Excludes anaesthetist"></label>
+      <button class="btn btn-primary">Add</button>
+    </div>
+    <datalist id="service-options">{% for s in all_services %}<option value="{{ s.name }}">{% endfor %}</datalist>
+  </form>
+</section>
+
+<section class="card" id="google">
+  <div class="card-head">
+    <h2>{{ icon("map") }} Google Business Profile</h2>
+    {% if provider.google_place_id %}<span class="badge badge-verified">{{ icon("check") }} Linked</span>
+    {% elif provider.google_profile_url %}<span class="badge badge-warning">Not synced</span>{% endif %}
+  </div>
+  {% if not settings.google_maps_api_key %}
+  <div class="alert alert-warning small">Add <code>GOOGLE_MAPS_API_KEY</code> to your <code>.env</code> file to capture reviews, rating and location from Google.</div>
+  {% endif %}
+  <form id="google-link-form" class="inline-form" data-provider="{{ provider.id }}">
+    <input name="url" type="text" required value="{{ provider.google_profile_url }}" placeholder="https://maps.app.goo.gl/…  or  Business name, City" aria-label="Google Business Profile link">
+    <button type="button" class="btn btn-outline" data-google-preview>Preview</button>
+    <button type="submit" class="btn btn-primary">Link & capture reviews</button>
+  </form>
+  <p class="small muted">Works with Google Maps “Share” links, full Google Maps URLs, Google Search business-profile links, place IDs, or plain “Business name, City”.</p>
+  <div id="google-result" aria-live="polite"></div>
+
+  {% if provider.google_sync_error %}<div class="alert alert-error small">Last sync error: {{ provider.google_sync_error }}</div>{% endif %}
+
+  {% if provider.google_place_id %}
+  <div class="google-summary">
+    <div><span class="muted small">Google rating</span><strong>{{ provider.google_rating or '–' }} ★</strong><span class="muted small">{{ provider.google_review_count or 0 }} ratings</span></div>
+    <div><span class="muted small">Location</span><strong>{{ '%.5f, %.5f'|format(provider.latitude, provider.longitude) if provider.latitude is not none else '—' }}</strong><a class="small" href="{{ provider.maps_link }}" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>
+    <div><span class="muted small">Last synced</span><strong>{{ provider.google_synced_at|ago }}</strong>
+      <button type="button" class="btn btn-ghost btn-sm" data-google-sync>{{ icon("refresh") }} Refresh now</button></div>
+  </div>
+  {% if google_reviews %}
+  <h3>Captured reviews ({{ google_reviews|length }})</h3>
+  <div class="review-list compact">
+    {% for r in google_reviews %}
+    <article class="review">
+      <div class="review-head"><strong>{{ r.author_name }}</strong><span class="small muted">{{ stars(r.rating) }} · {{ r.relative_time }}</span></div>
+      <p class="review-text small">{{ r.text|truncate(260) }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<form class="card form-grid" id="details" method="post" action="{{ '/admin/providers/%d'|format(provider.id) if provider else '/admin/providers' }}">
+  <h2 class="span-2">Details</h2>
+  <label class="field span-2"><span>Name *</span><input name="name" required value="{{ provider.name if provider }}"></label>
+  <label class="field"><span>Type</span>
+    <select name="provider_type">{% for t in types %}<option {% if provider and provider.provider_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  </label>
+  <label class="field"><span>Specialties <small class="muted">(helps AI search)</small></span><input name="specialties" value="{{ provider.specialties if provider }}" placeholder="Orthopaedics, Maternity"></label>
+  <label class="field span-2"><span>Description</span><textarea name="description" rows="3">{{ provider.description if provider }}</textarea></label>
+  <label class="field span-2"><span>Street address</span><input name="address" value="{{ provider.address if provider }}"></label>
+  <label class="field"><span>City</span><input name="city" value="{{ provider.city if provider }}"></label>
+  <label class="field"><span>Province</span><input name="province" value="{{ provider.province if provider }}"></label>
+  <input type="hidden" name="country" value="{{ provider.country if provider else 'South Africa' }}">
+  <label class="field"><span>Latitude</span><input name="latitude" inputmode="decimal" value="{{ provider.latitude if provider and provider.latitude is not none }}" placeholder="Filled from Google"></label>
+  <label class="field"><span>Longitude</span><input name="longitude" inputmode="decimal" value="{{ provider.longitude if provider and provider.longitude is not none }}" placeholder="Filled from Google"></label>
+  <label class="field"><span>Phone</span><input name="phone" value="{{ provider.phone if provider }}"></label>
+  <label class="field"><span>Email</span><input name="email" type="email" value="{{ provider.email if provider }}"></label>
+  <label class="field"><span>Website</span><input name="website" type="url" value="{{ provider.website if provider }}"></label>
+  <label class="field"><span>Booking URL <small class="muted">(Book Now button)</small></span><input name="booking_url" type="url" value="{{ provider.booking_url if provider }}"></label>
+  <label class="field"><span>Average wait (minutes)</span><input name="avg_wait_minutes" type="number" min="0" value="{{ provider.avg_wait_minutes if provider and provider.avg_wait_minutes is not none }}"></label>
+  <label class="field"><span>Opening hours <small class="muted">(one line per day)</small></span><textarea name="opening_hours" rows="3">{{ provider.opening_hours if provider }}</textarea></label>
+  {% if not provider %}
+  <label class="field span-2"><span>Google Business Profile link</span>
+    <input name="google_profile_url" placeholder="https://maps.app.goo.gl/…">
+    <small class="muted">Paste the Share link from Google Maps. Reviews, rating and location are captured when you save.</small>
+  </label>
+  {% endif %}
+  <div class="span-2 check-row">
+    <label class="check"><input type="checkbox" name="is_active" {% if not provider or provider.is_active %}checked{% endif %}> Visible to customers</label>
+    <label class="check"><input type="checkbox" name="is_partner" {% if provider and provider.is_partner %}checked{% endif %}> Trusted partner</label>
+    <label class="check"><input type="checkbox" name="is_verified" {% if provider and provider.is_verified %}checked{% endif %}> Prices verified</label>
+    {% if provider and provider.is_demo %}<label class="check"><input type="checkbox" name="clear_demo"> Mark as real (remove “Sample data” badge)</label>{% endif %}
+  </div>
+  <div class="span-2 form-actions"><button class="btn btn-primary">{{ 'Save details' if provider else 'Create provider' }}</button></div>
+</form>
+
+{% if provider %}
+<section class="card danger-zone">
+  <div>
+    <h2>Delete provider</h2>
+    <p class="small muted">Removes the provider, all its prices, price history and reviews.</p>
+  </div>
+  <form method="post" action="/admin/providers/{{ provider.id }}/delete" data-confirm="Delete {{ provider.name }} and all its prices? This cannot be undone.">
+    <button class="btn btn-danger">{{ icon("trash") }} Delete</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

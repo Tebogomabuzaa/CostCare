@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block content %}
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">{{ icon("sparkles") }} AI-powered price search · South Africa</span>
+      <h1>Your guide to <span class="grad-text">real-time healthcare costs.</span></h1>
+      <p class="lead">Know what a GP visit, scan, dental treatment or procedure will cost <strong>before</strong> you walk in.
+        Type what you need, where, and your budget — all in one search.</p>
+
+      <form class="search-xl" action="/find" method="get" role="search">
+        <span class="search-icon">{{ icon("search") }}</span>
+        <input name="q" type="search" placeholder="Search for healthcare prices in South Africa" aria-label="Search procedures, places and budget" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
+      <div class="example-chips">
+        <span class="muted small">Try:</span>
+        {% for ex in examples %}<a class="chip chip-link" href="/find?q={{ ex|urlencode }}">{{ ex }}</a>{% endfor %}
+      </div>
+
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="{{ '/dashboard' if current_user else '/signup' }}">Get Started</a>
+        <a class="btn btn-outline btn-lg" href="/find">Explore Prices {{ icon("arrow") }}</a>
+      </div>
+    </div>
+
+    <div class="hero-visual" aria-hidden="true">
+      {% for name, category, lo, hi, count in popular[:3] %}
+      <div class="float-card fc-{{ loop.index }}">
+        <span class="chip chip-soft">{{ category }}</span>
+        <strong>{{ name }}</strong>
+        <span class="price">{{ price_range(lo, hi) }}</span>
+        <span class="muted small">{{ count }} provider{{ 's' if count != 1 }} · live prices</span>
+      </div>
+      {% endfor %}
+      <div class="hero-orb"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <dl class="stat-strip">
+      <div><dt>Providers</dt><dd>{{ stats.providers }}</dd></div>
+      <div><dt>Prices listed</dt><dd>{{ stats.prices }}</dd></div>
+      <div><dt>Cities</dt><dd>{{ stats.cities }}</dd></div>
+      <div><dt>Last price update</dt><dd>{{ stats.last_update|ago }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <h2>Why travellers use CostCare</h2>
+      <p class="muted">Healthcare prices in South Africa are hard to find online. We make them clear, current and easy to compare.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature">
+        <span class="feature-icon">{{ icon("bolt") }}</span>
+        <h3>Real-Time Updates</h3>
+        <p class="muted">Providers update their price lists directly, and every price shows exactly when it was last confirmed.</p>
+      </article>
+      <article class="feature">
+        <span class="feature-icon">{{ icon("shield") }}</span>
+        <h3>Trusted Partners</h3>
+        <p class="muted">Verified hospitals, clinics and practices, with genuine Google ratings and reviews alongside each price.</p>
+      </article>
+      <article class="feature">
+        <span class="feature-icon">{{ icon("compass") }}</span>
+        <h3>Easy Access</h3>
+        <p class="muted">One search for procedure, place and budget. See it on a map, get directions, and book in a tap.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+{% if popular %}
+<section class="section section-alt">
+  <div class="container">
+    <div class="section-head row">
+      <div>
+        <h2>Popular services</h2>
+        <p class="muted">Typical price ranges across listed providers.</p>
+      </div>
+      <a class="btn btn-outline" href="/find">View all prices {{ icon("arrow") }}</a>
+    </div>
+    <div class="service-grid">
+      {% for name, category, lo, hi, count in popular %}
+      <a class="service-card" href="/find?q={{ name|urlencode }}">
+        <span class="chip chip-soft">{{ category }}</span>
+        <h3>{{ name }}</h3>
+        <span class="price">{{ price_range(lo, hi) }}</span>
+        <span class="muted small">{{ count }} provider{{ 's' if count != 1 }} {{ icon("arrow") }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="container">
+    <div class="section-head"><h2>How it works</h2></div>
+    <ol class="steps">
+      <li><span class="step-num">1</span><h3>Describe what you need</h3><p class="muted">“Stitches in Durban”, “MRI under R10 000”, “cheapest dentist in Cape Town”. Our AI understands it.</p></li>
+      <li><span class="step-num">2</span><h3>Compare real prices</h3><p class="muted">Filter by budget, rating and wait time. Every price shows when it was last updated.</p></li>
+      <li><span class="step-num">3</span><h3>Plan & go</h3><p class="muted">Save providers, track planned costs, get directions, and book directly with the provider.</p></li>
+    </ol>
+    {% if cities %}
+    <div class="city-strip">
+      <span class="muted small">Browse by city:</span>
+      {% for c in cities %}<a class="chip chip-link" href="/find?q={{ ('prices in ' ~ c)|urlencode }}">{{ icon("pin") }} {{ c }}</a>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="cta-band">
+      <div>
+        <h2>Are you a healthcare provider?</h2>
+        <p>Show upfront prices, build trust and reach travellers looking for clear, transparent care.</p>
+      </div>
+      <a class="btn btn-lg btn-light" href="/about#partner">Become a Partner {{ icon("arrow") }}</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

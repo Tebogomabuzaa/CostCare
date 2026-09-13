@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sign up | CostCare{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <section class="card auth-card">
+    <h1>Create your free account</h1>
+    <p class="muted">Save providers, track planned treatment costs and get notified when prices change.</p>
+    <form method="post" action="/signup" class="stack">
+      <label class="field"><span>Name</span><input name="name" required autocomplete="name" autofocus></label>
+      <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
+      <label class="field"><span>Password</span><input name="password" type="password" minlength="8" required autocomplete="new-password"><small class="muted">At least 8 characters</small></label>
+      <label class="field"><span>Where are you travelling? (optional)</span>
+        <select name="preferred_city">
+          <option value="">Not sure yet</option>
+          {% for c in cities %}<option>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary btn-block btn-lg">Get Started</button>
+    </form>
+    <p class="small muted center">Already have an account? <a href="/login">Log in</a></p>
+  </section>
+</div>
+{% endblock %}

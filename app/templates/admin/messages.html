@@ -1,0 +1,30 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Messages</h1>
+    <p class="muted">Contact form messages and partnership applications.</p>
+  </div>
+</div>
+<div class="stack">
+  {% for m in items %}
+  <article class="card message">
+    <div class="card-head">
+      <div>
+        <strong>{{ m.subject or '(no subject)' }}</strong>
+        <span class="badge {{ 'badge-partner' if m.kind == 'partner' else '' }}">{{ m.kind }}</span>
+      </div>
+      <span class="small muted">{{ m.created_at|ago }}</span>
+    </div>
+    <p class="small">
+      {{ m.name }} · <a href="mailto:{{ m.email }}">{{ m.email }}</a>
+      {% if m.phone %} · {{ m.phone }}{% endif %}{% if m.organisation %} · <strong>{{ m.organisation }}</strong>{% endif %}
+    </p>
+    {% if m.message %}<p class="message-body">{{ m.message }}</p>{% endif %}
+  </article>
+  {% else %}
+  <div class="card empty">No messages yet.</div>
+  {% endfor %}
+</div>
+{% endblock %}

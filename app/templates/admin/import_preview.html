@@ -1,0 +1,83 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <a href="/admin/import" class="small">← Imports</a>
+    <h1>{{ job.filename }}</h1>
+    <p class="muted">Uploaded {{ job.created_at|ago }} · <span class="badge badge-{{ job.status }}">{{ job.status }}</span></p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat"><span class="stat-label">Valid rows</span><strong>{{ summary.rows }}</strong></div>
+  <div class="stat"><span class="stat-label">New prices</span><strong>{{ summary.new_prices }}</strong></div>
+  <div class="stat {{ 'stat-accent' if summary.price_changes }}"><span class="stat-label">Price changes</span><strong>{{ summary.price_changes }}</strong></div>
+  <div class="stat"><span class="stat-label">Unchanged (re-confirmed)</span><strong>{{ summary.unchanged }}</strong></div>
+  <div class="stat"><span class="stat-label">New providers / services</span><strong>{{ summary.new_providers }} / {{ summary.new_services }}</strong></div>
+  <div class="stat"><span class="stat-label">Google links to sync</span><strong>{{ summary.google_links }}</strong></div>
+  <div class="stat {{ 'stat-warn' if errors }}"><span class="stat-label">Rows skipped</span><strong>{{ errors|length }}</strong></div>
+</div>
+
+{% if job.status == 'applied' and summary.result %}
+<div class="alert alert-success">
+  {{ icon("check") }} Applied {{ job.applied_at|ago }}: {{ summary.result.created }} new prices, {{ summary.result.updated }} updated,
+  {{ summary.result.unchanged }} re-confirmed, {{ summary.result.providers_created }} providers and {{ summary.result.services_created }} services created{% if summary.result.hidden %}, {{ summary.result.hidden }} services hidden{% endif %}.
+  <a href="/find">See it on the customer site →</a>
+</div>
+{% elif job.status == 'discarded' %}
+<div class="alert alert-info">This import was discarded. Nothing was changed.</div>
+{% endif %}
+
+{% if errors %}
+<section class="card">
+  <div class="card-head"><h2>Rows that will be skipped</h2></div>
+  <div class="table-wrap">
+    <table class="table table-compact">
+      <thead><tr><th>Row</th><th>Problem</th></tr></thead>
+      <tbody>{% for e in errors %}<tr><td>{{ e.row }}</td><td class="text-danger">{{ e.error }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if job.status == 'pending' and rows %}
+<section class="card apply-bar">
+  <form method="post" action="/admin/import/{{ job.id }}/apply" id="apply-form">
+    <label class="check"><input type="checkbox" name="hide_missing"> Full price-list replacement: hide services <em>not</em> in this file for the providers it contains</label>
+  </form>
+  <div class="btn-row">
+    <form method="post" action="/admin/import/{{ job.id }}/discard"><button class="btn btn-ghost">Discard</button></form>
+    <button form="apply-form" class="btn btn-primary btn-lg">{{ icon("check") }} Apply {{ rows|length }} rows</button>
+  </div>
+</section>
+{% endif %}
+
+{% if rows %}
+<section class="card table-card">
+  <div class="card-head"><h2>Preview</h2>{% if rows|length > 500 %}<span class="muted small">Showing first 500 of {{ rows|length }}</span>{% endif %}</div>
+  <div class="table-wrap">
+    <table class="table table-compact">
+      <thead><tr><th>Row</th><th>Provider</th><th>Service</th><th>Price</th><th>Change</th></tr></thead>
+      <tbody>
+      {% for r in rows[:500] %}
+      <tr>
+        <td class="muted">{{ r.row }}</td>
+        <td>{{ r.provider_name }}{% if r.city %} <span class="muted small">· {{ r.city }}</span>{% endif %}
+          {% if r.provider_action == 'new' %}<span class="badge badge-accent">new</span>{% endif %}
+          {% if r.google_profile_url %}<span class="badge badge-verified" title="{{ r.google_profile_url }}">Google</span>{% endif %}</td>
+        <td>{{ r.service_name }} {% if r.service_action == 'new' %}<span class="badge badge-accent">new</span>{% endif %}</td>
+        <td class="nowrap"><strong>{{ price_range(r.price_min, r.price_max) }}</strong></td>
+        <td class="nowrap">
+          {% if r.price_action == 'update' %}<span class="badge badge-warning">changed</span> <span class="small muted">was {{ price_range(r.old_price_min, r.old_price_max) }}</span>
+          {% elif r.price_action == 'create' %}<span class="badge badge-verified">new price</span>
+          {% else %}<span class="badge">unchanged</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

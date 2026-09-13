@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Find healthcare prices | CostCare{% endblock %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block body_class %}page-finder{% endblock %}
+{% block content %}
+<section class="finder-head">
+  <div class="container">
+    <h1>Find healthcare prices</h1>
+    <p class="muted">Describe what you need in your own words — procedure, place and budget. Our AI finds the facilities that offer it.</p>
+    <form id="finder-form" class="search-xl search-finder" role="search">
+      <span class="search-icon">{{ icon("search") }}</span>
+      <input id="q" name="q" type="search" value="{{ q }}" autocomplete="off"
+             placeholder="Try “MRI scan in Durban” or “cheap dentist in Cape Town under R1500”"
+             aria-label="Search procedures, places and budget">
+      <span class="search-spinner" aria-hidden="true"></span>
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+    <div id="ai-summary" class="ai-summary" aria-live="polite"></div>
+  </div>
+</section>
+
+<div class="container finder-layout">
+  <div class="filters-backdrop" hidden></div>
+  <aside class="filters" id="filters" aria-label="Filters">
+    <div class="filters-head">
+      <h2>{{ icon("filter") }} Filters</h2>
+      <button type="button" class="btn btn-ghost btn-sm" id="reset-filters">Reset</button>
+    </div>
+
+    <label class="field">
+      <span>Country</span>
+      <select disabled><option>South Africa</option></select>
+      <small class="muted">More countries coming soon</small>
+    </label>
+
+    <label class="field">
+      <span>Location</span>
+      <select id="f-location">
+        <option value="">Anywhere</option>
+        {% for c in cities %}<option>{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="button" class="btn btn-outline btn-sm btn-block" id="use-location">{{ icon("compass") }} Use my location</button>
+
+    <label class="field">
+      <span>Service type</span>
+      <select id="f-category">
+        <option value="">All services</option>
+        {% for c in categories %}<option>{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <div class="field">
+      <span>Price range</span>
+      <div class="price-label" id="price-label">Any price</div>
+      <div class="dual-range">
+        <div class="dual-range-track"><div class="dual-range-fill" id="range-fill"></div></div>
+        <input type="range" id="price-min" min="0" max="1000" value="0" aria-label="Minimum price">
+        <input type="range" id="price-max" min="0" max="1000" value="1000" aria-label="Maximum price">
+      </div>
+      <div class="range-scale"><span>R100</span><span>R250k+</span></div>
+    </div>
+
+    <div class="field">
+      <span>Minimum rating</span>
+      <div class="rating-buttons" role="group" aria-label="Minimum rating">
+        <button type="button" data-rating="" class="is-active" aria-pressed="true">Any</button>
+        <button type="button" data-rating="3" aria-pressed="false">3★+</button>
+        <button type="button" data-rating="4" aria-pressed="false">4★+</button>
+        <button type="button" data-rating="4.5" aria-pressed="false">4.5★+</button>
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-primary btn-block only-mobile" id="close-filters">Show results</button>
+  </aside>
+
+  <section class="results-col">
+    <div class="results-toolbar">
+      <div id="result-count" class="result-count" aria-live="polite">&nbsp;</div>
+      <div class="toolbar-right">
+        <button type="button" class="btn btn-outline btn-sm only-mobile" id="open-filters">{{ icon("filter") }} Filters</button>
+        <button type="button" class="btn btn-outline btn-sm hide-wide" id="toggle-map" aria-pressed="false">{{ icon("map") }} Map</button>
+        <label class="sort">
+          <span class="muted small">Sort by</span>
+          <select id="f-sort">
+            <option value="relevance">Best match</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="rating">Highest rated</option>
+            <option value="wait">Shortest wait</option>
+            <option value="distance" disabled>Nearest (use location)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div id="notice" class="alert alert-info" hidden></div>
+    <div id="results" class="results-grid" aria-live="polite"></div>
+    <p class="disclaimer small muted">Prices are estimates in South African Rand supplied by providers. Final costs depend on your assessment — always confirm before treatment.</p>
+  </section>
+
+  <aside class="map-col" id="map-col" aria-label="Map of results">
+    <div id="map" class="map"></div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="/static/js/finder.js" defer></script>
+{% endblock %}

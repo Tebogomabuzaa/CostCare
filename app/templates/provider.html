@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon, stars %}
+{% block title %}{{ provider.name }} prices | CostCare{% endblock %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="container">
+    <nav class="breadcrumbs small" aria-label="Breadcrumb">
+      <a href="/find">Find prices</a> <span>/</span>
+      {% if provider.city %}<a href="/find?q={{ ('prices in ' ~ provider.city)|urlencode }}">{{ provider.city }}</a> <span>/</span>{% endif %}
+      <span aria-current="page">{{ provider.name }}</span>
+    </nav>
+
+    <div class="provider-hero card">
+      <div class="ph-main">
+        <div class="badges">
+          <span class="chip chip-soft">{{ provider.provider_type }}</span>
+          {% if provider.is_partner %}<span class="badge badge-partner">{{ icon("shield") }} Trusted partner</span>{% endif %}
+          {% if provider.is_verified %}<span class="badge badge-verified">{{ icon("check") }} Prices verified</span>{% endif %}
+          {% if provider.is_demo %}<span class="badge badge-demo">Sample data</span>{% endif %}
+        </div>
+        <h1>{{ provider.name }}</h1>
+        {% if provider.address or provider.city %}
+        <p class="muted ph-address">{{ icon("pin") }} {{ provider.address or provider.city }}{% if provider.province and provider.province not in (provider.address or '') %}, {{ provider.province }}{% endif %}</p>
+        {% endif %}
+        <div class="ph-stats">
+          {% if provider.rating %}
+          <a href="#reviews" class="rating-lg">{{ stars(provider.rating) }} <strong>{{ provider.rating }}</strong>
+            <span class="muted">({{ provider.review_count }} {{ 'Google ratings' if provider.google_rating is not none else 'reviews' }})</span></a>
+          {% endif %}
+          {% if provider.avg_wait_minutes %}<span>{{ icon("clock") }} ~{{ provider.avg_wait_minutes }} min average wait</span>{% endif %}
+          {% if last_updated %}<span>{{ icon("refresh") }} Prices updated {{ last_updated|ago }}</span>{% endif %}
+        </div>
+        {% if provider.description %}<p class="ph-desc">{{ provider.description }}</p>{% endif %}
+      </div>
+      <div class="ph-actions">
+        {% if provider.book_link %}
+        <a class="btn btn-primary btn-lg" href="{{ provider.book_link }}" {% if not provider.book_link.startswith('tel:') %}target="_blank" rel="noopener"{% endif %}>{{ icon("calendar") }} Book now</a>
+        {% endif %}
+        <a class="btn btn-outline" href="{{ provider.directions_link }}" target="_blank" rel="noopener">{{ icon("map") }} Directions</a>
+        <button type="button" class="btn btn-ghost fav-toggle {{ 'is-active' if is_favorite }}" data-fav="{{ provider.id }}" aria-pressed="{{ 'true' if is_favorite else 'false' }}">{{ icon("heart") }} <span>Save</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container provider-layout">
+  <div class="provider-main">
+    <section class="card" id="prices">
+      <div class="card-head">
+        <h2>Services & prices</h2>
+        <span class="muted small">{{ groups.values()|map('length')|sum }} services</span>
+      </div>
+      <p class="muted small">Estimated ranges in South African Rand (ZAR). Final costs depend on your assessment and the practitioners involved.</p>
+      {% for category, items in groups.items() %}
+      <h3 class="group-title">{{ category }}</h3>
+      <div class="price-list">
+        {% for l in items %}
+        <div class="price-row">
+          <div class="price-row-main">
+            <strong>{{ l.service.name }}</strong>
+            {% if l.notes %}<div class="muted small">{{ l.notes }}</div>{% endif %}
+            <div class="updated">Updated {{ l.price_updated_at|ago }}</div>
+          </div>
+          <div class="price-row-side">
+            <span class="price">{{ price_range(l.price_min, l.price_max) }}</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-plan="{{ l.id }}">{{ icon("plus") }} Cost plan</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">This provider hasn't listed prices yet.</p>
+      {% endfor %}
+    </section>
+
+    <section class="card" id="reviews">
+      <div class="card-head">
+        <h2>Reviews</h2>
+        {% if provider.rating %}<span class="rating-lg">{{ stars(provider.rating) }} <strong>{{ provider.rating }}</strong></span>{% endif %}
+      </div>
+
+      {% if google_reviews %}
+      <div class="review-source">
+        <span class="google-attr"><span class="g-logo">G</span> Reviews from Google</span>
+        {% if provider.maps_link %}<a class="small" href="{{ provider.maps_link }}" target="_blank" rel="noopener">See all {{ provider.google_review_count or '' }} on Google Maps ↗</a>{% endif %}
+      </div>
+      <div class="review-list">
+        {% for r in google_reviews %}
+        <article class="review">
+          <div class="review-head">
+            {% if r.author_photo_url %}<img class="avatar" src="{{ r.author_photo_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+            {% else %}<span class="avatar avatar-fallback">{{ (r.author_name or '?')[0]|upper }}</span>{% endif %}
+            <div>
+              {% if r.author_url %}<a href="{{ r.author_url }}" target="_blank" rel="noopener"><strong>{{ r.author_name }}</strong></a>{% else %}<strong>{{ r.author_name }}</strong>{% endif %}
+              <div class="small muted">{{ stars(r.rating) }} · {{ r.relative_time }}</div>
+            </div>
+          </div>
+          {% if r.text %}<p class="review-text">{{ r.text }}</p>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if other_reviews %}
+      <div class="review-source"><span>CostCare community reviews</span></div>
+      <div class="review-list">
+        {% for r in other_reviews %}
+        <article class="review">
+          <div class="review-head">
+            <span class="avatar avatar-fallback">{{ (r.author_name or '?')[0]|upper }}</span>
+            <div>
+              <strong>{{ r.author_name }}</strong>{% if r.source == 'demo' %} <span class="badge badge-demo">Sample</span>{% endif %}
+              <div class="small muted">{{ stars(r.rating) }} · {{ r.relative_time or (r.created_at|ago) }}</div>
+            </div>
+          </div>
+          {% if r.text %}<p class="review-text">{{ r.text }}</p>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if not google_reviews and not other_reviews %}<p class="empty">No reviews yet.</p>{% endif %}
+
+      {% if current_user %}
+      <details class="review-form">
+        <summary class="btn btn-outline btn-sm">Write a review</summary>
+        <form method="post" action="/providers/{{ provider.slug }}/reviews" class="stack">
+          <fieldset class="star-input">
+            <legend class="small muted">Your rating</legend>
+            {% for n in [5, 4, 3, 2, 1] %}
+            <input type="radio" id="star{{ n }}" name="rating" value="{{ n }}" {% if n == 5 %}checked{% endif %}><label for="star{{ n }}" title="{{ n }} stars">★</label>
+            {% endfor %}
+          </fieldset>
+          <label class="field"><span>Your experience</span><textarea name="text" rows="3" maxlength="2000" placeholder="Was the final cost close to the estimate? How was the service?"></textarea></label>
+          <button class="btn btn-primary">Post review</button>
+        </form>
+      </details>
+      {% else %}
+      <p class="small muted"><a href="/login?next=/providers/{{ provider.slug }}">Log in</a> to write a review.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="provider-aside">
+    <div class="card sticky-card">
+      {% if provider.latitude is not none %}
+      <div id="provider-map" class="mini-map" data-lat="{{ provider.latitude }}" data-lng="{{ provider.longitude }}" data-name="{{ provider.name }}"></div>
+      {% endif %}
+      <ul class="contact-list">
+        {% if provider.phone %}<li>{{ icon("phone") }} <a href="tel:{{ provider.phone|replace(' ', '') }}">{{ provider.phone }}</a></li>{% endif %}
+        {% if provider.email %}<li>{{ icon("mail") }} <a href="mailto:{{ provider.email }}">{{ provider.email }}</a></li>{% endif %}
+        {% if provider.website %}<li>{{ icon("globe") }} <a href="{{ provider.website }}" target="_blank" rel="noopener">Website</a></li>{% endif %}
+        <li>{{ icon("map") }} <a href="{{ provider.maps_link }}" target="_blank" rel="noopener">Open in Google Maps</a></li>
+      </ul>
+      {% if provider.opening_hours %}
+      <h3 class="small-title">{{ icon("clock") }} Opening hours</h3>
+      <ul class="hours">{% for line in provider.opening_hours.split('\n') %}<li>{{ line }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  (function () {
+    var el = document.getElementById('provider-map');
+    if (!el || !window.L) return;
+    var lat = parseFloat(el.dataset.lat), lng = parseFloat(el.dataset.lng);
+    var map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    L.marker([lat, lng]).addTo(map).bindPopup(el.dataset.name);
+  })();
+</script>
+{% endblock %}

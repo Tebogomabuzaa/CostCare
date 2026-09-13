@@ -1,0 +1,113 @@
+{% from "_icons.html" import icon %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CostCare — Know healthcare costs before you go{% endblock %}</title>
+  <meta name="description" content="CostCare helps travellers find up-to-date healthcare prices in South Africa before visiting a provider.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230f766e'/><path d='M13 8h6v5h5v6h-5v5h-6v-5H8v-6h5z' fill='white'/></svg>">
+  <link rel="stylesheet" href="/static/css/app.css">
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="logo" aria-label="CostCare home">
+        <span class="logo-mark"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.5 3h5v6.5H21v5h-6.5V21h-5v-6.5H3v-5h6.5z" fill="currentColor"/></svg></span>
+        <span>Cost<span class="logo-accent">Care</span></span>
+      </a>
+      <nav class="main-nav" aria-label="Main">
+        {% set links = [("/", "Home"), ("/find", "Find Prices"), ("/about", "About & Partners"), ("/contact", "Contact")] %}
+        {% for href, label in links %}
+        <a href="{{ href }}" class="{{ 'active' if path == href }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <div class="header-actions">
+        {% if current_user %}
+          {% if current_user.is_admin %}<a class="btn btn-ghost btn-sm desktop-only" href="/admin">{{ icon("grid") }} Admin</a>{% endif %}
+          <a class="icon-btn" href="/dashboard#notifications" aria-label="Notifications{% if unread_count %}, {{ unread_count }} unread{% endif %}">
+            {{ icon("bell") }}{% if unread_count %}<span class="dot-count">{{ unread_count }}</span>{% endif %}
+          </a>
+          <a class="btn btn-outline btn-sm desktop-only" href="/dashboard">My dashboard</a>
+        {% else %}
+          <a class="btn btn-ghost btn-sm desktop-only" href="/login">Log in</a>
+          <a class="btn btn-primary btn-sm desktop-only" href="/signup">Sign up</a>
+        {% endif %}
+        <button class="icon-btn nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-nav">{{ icon("menu") }}</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mobile-nav-backdrop" hidden></div>
+  <aside id="mobile-nav" class="mobile-nav" aria-hidden="true" aria-label="Menu">
+    <div class="mobile-nav-head">
+      <span class="logo"><span>Cost<span class="logo-accent">Care</span></span></span>
+      <button class="icon-btn mobile-nav-close" type="button" aria-label="Close menu">{{ icon("x") }}</button>
+    </div>
+    <nav>
+      <a href="/" class="{{ 'active' if path == '/' }}">Home</a>
+      <a href="/find" class="{{ 'active' if path == '/find' }}">{{ icon("search") }} Find Prices</a>
+      <a href="/about" class="{{ 'active' if path == '/about' }}">About & Partners</a>
+      <a href="/contact" class="{{ 'active' if path == '/contact' }}">Contact</a>
+      <a href="/faq">FAQs</a>
+    </nav>
+    <div class="mobile-nav-foot">
+      {% if current_user %}
+        {% if current_user.is_admin %}<a class="btn btn-outline btn-block" href="/admin">Admin dashboard</a>{% endif %}
+        <a class="btn btn-primary btn-block" href="/dashboard">My dashboard</a>
+        <form method="post" action="/logout"><button class="btn btn-ghost btn-block">Log out</button></form>
+      {% else %}
+        <a class="btn btn-primary btn-block" href="/signup">Sign up free</a>
+        <a class="btn btn-outline btn-block" href="/login">Log in</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  {% if flashes %}
+  <div class="flash-stack container" role="status">
+    {% for f in flashes %}
+    <div class="alert alert-{{ f.kind }} flash">
+      <span>{{ f.message }}</span>
+      <button type="button" class="alert-close" aria-label="Dismiss">{{ icon("x") }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <main id="main">{% block content %}{% endblock %}</main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <a href="/" class="logo"><span>Cost<span class="logo-accent">Care</span></span></a>
+        <p class="muted small">Your guide to real-time healthcare costs. Estimates only — always confirm with the provider.
+          In an emergency call <strong>112</strong> (mobile) or <strong>10177</strong>.</p>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <a href="/find">Find prices</a><a href="/about">About us</a><a href="/about#partner">Become a partner</a>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <a href="/faq">FAQs</a><a href="/contact">Contact</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a>
+      </div>
+      <div>
+        <h4>Follow</h4>
+        <a href="https://www.linkedin.com" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://www.instagram.com" target="_blank" rel="noopener">Instagram</a>
+        <a href="https://x.com" target="_blank" rel="noopener">X (Twitter)</a>
+      </div>
+    </div>
+    <div class="container footer-bottom small muted">© CostCare · Built for travellers in South Africa</div>
+  </footer>
+
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="/static/js/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

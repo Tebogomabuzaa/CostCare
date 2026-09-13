@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Admin | CostCare{% endblock %}
+{% block body_class %}admin{% endblock %}
+{% block content %}
+<div class="container admin-shell">
+  <aside class="admin-side">
+    <nav aria-label="Admin">
+      <a href="/admin" class="{{ 'active' if path == '/admin' }}">{{ icon("grid") }} Dashboard</a>
+      <a href="/admin/providers" class="{{ 'active' if path.startswith('/admin/providers') }}">{{ icon("building") }} Providers & prices</a>
+      <a href="/admin/services" class="{{ 'active' if path.startswith('/admin/services') }}">{{ icon("list") }} Service catalogue</a>
+      <a href="/admin/import" class="{{ 'active' if path.startswith('/admin/import') }}">{{ icon("upload") }} Import Excel prices</a>
+      <a href="/admin/messages" class="{{ 'active' if path.startswith('/admin/messages') }}">{{ icon("mail") }} Messages</a>
+      <a href="/docs" target="_blank" rel="noopener">{{ icon("globe") }} API docs ↗</a>
+    </nav>
+  </aside>
+  <section class="admin-main">
+    {% block admin %}{% endblock %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/admin.js"></script>{% endblock %}

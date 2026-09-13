@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Contact | CostCare{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="container narrow-head">
+    <h1>Contact us</h1>
+    <p class="lead">Questions about prices, your account or partnering with us? We're here to help.</p>
+  </div>
+</section>
+<div class="container contact-grid">
+  <section class="card">
+    <h2>Send us a message</h2>
+    <form method="post" action="/contact" class="form-grid">
+      <label class="field"><span>Name *</span><input name="name" required autocomplete="name"></label>
+      <label class="field"><span>Email *</span><input name="email" type="email" required autocomplete="email"></label>
+      <label class="field span-2"><span>Subject</span><input name="subject"></label>
+      <label class="field span-2"><span>Message *</span><textarea name="message" rows="5" required></textarea></label>
+      <div class="span-2"><button class="btn btn-primary">{{ icon("mail") }} Send message</button></div>
+    </form>
+  </section>
+  <aside class="stack">
+    <section class="card">
+      <h2>Support</h2>
+      <ul class="contact-list">
+        <li>{{ icon("mail") }} <a href="mailto:support@costcare.co.za">support@costcare.co.za</a></li>
+        <li>{{ icon("phone") }} <a href="tel:+27210000000">+27 21 000 0000</a></li>
+        <li>{{ icon("pin") }} <span>Cape Town, South Africa</span></li>
+        <li>{{ icon("clock") }} <span>Mon–Fri, 08:00–17:00 SAST</span></li>
+      </ul>
+      <div class="alert alert-warning small">Medical emergency? Call <strong>112</strong> from a mobile or <strong>10177</strong> for an ambulance.</div>
+    </section>
+  </aside>
+  <section class="card span-all">
+    <h2>FAQs</h2>
+    <div class="faq-list">
+      {% for q, a in faqs %}
+      <details class="faq"><summary>{{ q }}</summary><p class="muted">{{ a }}</p></details>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

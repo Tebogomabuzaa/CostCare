@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}About & Partnerships | CostCare{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="container narrow-head">
+    <span class="eyebrow">{{ icon("users") }} About CostCare</span>
+    <h1>Healthcare costs, <span class="grad-text">made predictable.</span></h1>
+    <p class="lead">Travellers often struggle to find accurate, current healthcare prices — and end up with surprise bills. CostCare puts clear price estimates in front of you before you visit a provider.</p>
+  </div>
+</section>
+
+<div class="container">
+  <div class="grid-2">
+    <section class="card">
+      <h2>Our mission</h2>
+      <p>Give every traveller and resident a reliable estimate of healthcare costs so they can budget with confidence and get care without financial surprises.</p>
+      <h2>Our vision</h2>
+      <p>A world where healthcare pricing is as transparent as booking a flight — starting in South Africa and expanding across the continent.</p>
+    </section>
+    <section class="card">
+      <h2>{{ icon("sparkles") }} AI with transparency</h2>
+      <ul class="checklist">
+        <li>{{ icon("check") }} <span><strong>Natural-language search:</strong> AI understands “stitches near Sea Point under R2000” and matches it to the right procedures and facilities.</span></li>
+        <li>{{ icon("check") }} <span><strong>Provider-supplied prices:</strong> partners upload and update price lists directly; each price shows when it was last updated.</span></li>
+        <li>{{ icon("check") }} <span><strong>Real reviews:</strong> Google ratings and reviews are shown with attribution, alongside community reviews.</span></li>
+        <li>{{ icon("check") }} <span><strong>Honest estimates:</strong> we show ranges, not promises, and always tell you to confirm with the provider.</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="section" id="partners">
+    <div class="section-head">
+      <h2>Partner with CostCare</h2>
+      <p class="muted">{{ partner_count }} providers already share upfront prices with travellers.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature"><span class="feature-icon">{{ icon("users") }}</span><h3>Reach more patients</h3><p class="muted">Appear in AI search results when travellers look for the services you offer, with directions and booking links.</p></article>
+      <article class="feature"><span class="feature-icon">{{ icon("shield") }}</span><h3>Build trust</h3><p class="muted">Transparent pricing and a “Trusted partner” badge reassure patients before they walk through your doors.</p></article>
+      <article class="feature"><span class="feature-icon">{{ icon("upload") }}</span><h3>Easy updates</h3><p class="muted">Update hundreds of prices at once with a simple Excel upload. Changes go live immediately.</p></article>
+    </div>
+  </section>
+
+  <section class="card partner-card" id="partner">
+    <div class="partner-copy">
+      <h2>Become a Partner</h2>
+      <p class="muted">Tell us about your facility and we'll be in touch within 2 business days to set up your listing.</p>
+    </div>
+    <form method="post" action="/partners/apply" class="form-grid">
+      <label class="field"><span>Your name *</span><input name="name" required autocomplete="name"></label>
+      <label class="field"><span>Facility / practice name *</span><input name="organisation" required></label>
+      <label class="field"><span>Email *</span><input name="email" type="email" required autocomplete="email"></label>
+      <label class="field"><span>Phone</span><input name="phone" type="tel" autocomplete="tel"></label>
+      <label class="field span-2"><span>Tell us about your services</span><textarea name="message" rows="4" placeholder="Location, services offered, number of practitioners…"></textarea></label>
+      <div class="span-2"><button class="btn btn-primary btn-lg">Become a Partner {{ icon("arrow") }}</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Import prices from Excel</h1>
+    <p class="muted">Update hundreds of prices at once. Changes appear on the customer site as soon as you apply them.</p>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2><span class="step-num sm">1</span> Get the spreadsheet</h2>
+    <p>Start from the blank template, or export current prices, edit them in Excel and upload the same file.</p>
+    <div class="btn-row">
+      <a class="btn btn-outline" href="/admin/import/template.xlsx">{{ icon("download") }} Blank template</a>
+      <a class="btn btn-outline" href="/admin/export/prices.xlsx">{{ icon("download") }} Export current prices</a>
+    </div>
+    <ul class="checklist small">
+      <li>{{ icon("check") }} <span>One row per service per provider.</span></li>
+      <li>{{ icon("check") }} <span>Required: <strong>Provider Name</strong>, <strong>Service Name</strong>, <strong>Price Min (ZAR)</strong>. Price Max is optional.</span></li>
+      <li>{{ icon("check") }} <span>New providers and services are created automatically; existing ones are matched by Provider ID, or name + city.</span></li>
+      <li>{{ icon("check") }} <span>Add a <strong>Google Business Profile URL</strong> and reviews, rating and location sync after import.</span></li>
+      <li>{{ icon("check") }} <span>Users who saved a provider are notified when its prices change.</span></li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2><span class="step-num sm">2</span> Upload & preview</h2>
+    <form method="post" action="/admin/import" enctype="multipart/form-data" class="stack" id="upload-form">
+      <label class="dropzone" for="file">
+        <span class="dz-icon">{{ icon("upload") }}</span>
+        <strong>Choose an .xlsx or .csv file</strong>
+        <span class="muted small" data-filename>or drag it here</span>
+        <input id="file" name="file" type="file" accept=".xlsx,.xlsm,.csv" required>
+      </label>
+      <button class="btn btn-primary btn-block">Upload & preview changes</button>
+    </form>
+    <p class="muted small center">Nothing changes until you review the preview and click <strong>Apply</strong>.</p>
+  </section>
+</div>
+
+<section class="card table-card">
+  <div class="card-head"><h2>Import history</h2></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>File</th><th>Uploaded</th><th>Status</th><th>Rows</th><th>New prices</th><th>Changes</th><th>Errors</th><th></th></tr></thead>
+      <tbody>
+      {% for job, s in jobs %}
+      <tr>
+        <td><strong>{{ job.filename }}</strong></td>
+        <td class="small muted">{{ job.created_at|ago }}</td>
+        <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
+        <td>{{ s.rows or 0 }}</td>
+        <td>{{ s.new_prices or 0 }}</td>
+        <td>{{ s.price_changes or 0 }}</td>
+        <td>{% if s.errors %}<span class="text-danger">{{ s.errors }}</span>{% else %}0{% endif %}</td>
+        <td class="row-actions"><a class="btn btn-outline btn-sm" href="/admin/import/{{ job.id }}">{{ 'Review' if job.status == 'pending' else 'View' }}</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty">No uploads yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

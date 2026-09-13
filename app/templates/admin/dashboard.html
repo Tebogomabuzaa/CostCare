@@ -1,0 +1,102 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Admin dashboard</h1>
+    <p class="muted">Manage providers, keep prices current, and connect Google Business Profiles.</p>
+  </div>
+  <div class="btn-row">
+    <a class="btn btn-primary" href="/admin/providers/new">{{ icon("plus") }} Add provider</a>
+    <a class="btn btn-outline" href="/admin/import">{{ icon("upload") }} Import Excel</a>
+  </div>
+</div>
+
+{% if stats.demo %}
+<div class="alert alert-warning">
+  <span><strong>{{ stats.demo }} sample providers</strong> are loaded so you can try the app. Their prices and reviews are illustrative. Delete them once you've added real providers.</span>
+  <form method="post" action="/admin/demo/delete" data-confirm="Delete all sample providers, their prices and sample reviews?">
+    <button class="btn btn-danger-outline btn-sm">{{ icon("trash") }} Delete sample data</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="stat-grid">
+  <a class="stat" href="/admin/providers"><span class="stat-label">Providers</span><strong>{{ stats.providers }}</strong></a>
+  <a class="stat" href="/admin/providers"><span class="stat-label">Price listings</span><strong>{{ stats.listings }}</strong></a>
+  <a class="stat" href="/admin/services"><span class="stat-label">Services</span><strong>{{ stats.services }}</strong></a>
+  <div class="stat {{ 'stat-warn' if stats.stale }}"><span class="stat-label">Prices older than {{ settings.stale_price_days }} days</span><strong>{{ stats.stale }}</strong></div>
+  <div class="stat"><span class="stat-label">Google profiles linked</span><strong>{{ stats.google_linked }}</strong>
+    {% if stats.google_pending %}<span class="small muted">{{ stats.google_pending }} pending sync</span>{% endif %}</div>
+  <a class="stat" href="/admin/messages"><span class="stat-label">Messages</span><strong>{{ stats.messages }}</strong></a>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2>{{ icon("map") }} Google Business Profiles</h2></div>
+    {% if not settings.google_maps_api_key %}
+    <div class="alert alert-warning small">Set <code>GOOGLE_MAPS_API_KEY</code> in <code>.env</code> to capture Google reviews, ratings and locations.</div>
+    {% endif %}
+    <p class="small muted">Refresh every linked profile's rating, reviews, hours and location. Run this regularly so cached Google data stays current.</p>
+    <button type="button" class="btn btn-outline" data-sync-all {% if not settings.google_maps_api_key %}disabled{% endif %}>{{ icon("refresh") }} Sync all Google profiles</button>
+    {% if stats.google_errors %}<p class="small text-danger">{{ stats.google_errors }} provider(s) had a sync error — see the providers list.</p>{% endif %}
+
+    <hr>
+    <h3>Discover real facilities on Google</h3>
+    <p class="small muted">Imports matching places with their address, location, rating and reviews. Then add their prices.</p>
+    <form id="discover-form" class="inline-form">
+      <input name="query" required placeholder="e.g. private hospitals in Cape Town" {% if not settings.google_maps_api_key %}disabled{% endif %}>
+      <input name="limit" type="number" min="1" max="20" value="10" class="input-narrow" aria-label="How many">
+      <button class="btn btn-primary" {% if not settings.google_maps_api_key %}disabled{% endif %}>Discover</button>
+    </form>
+    <div id="discover-result"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>{{ icon("refresh") }} Recent price changes</h2></div>
+    {% if changes %}
+    <ul class="change-list">
+      {% for h in changes %}
+      <li>
+        <div><strong>{{ h.listing.service.name }}</strong> · <a href="/admin/providers/{{ h.listing.provider_id }}">{{ h.listing.provider.name }}</a></div>
+        <div class="small">
+          <span class="muted">{{ price_range(h.old_min, h.old_max) }}</span> → <strong>{{ price_range(h.new_min, h.new_max) }}</strong>
+          <span class="muted">· {{ h.source }} · {{ h.changed_at|ago }}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="empty small">No price changes yet. Edit a price or import a spreadsheet.</p>{% endif %}
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2>{{ icon("clock") }} Oldest prices</h2><a class="small" href="/admin/export/prices.xlsx">Export all to Excel</a></div>
+    {% if stale %}
+    <div class="table-wrap"><table class="table table-compact">
+      <thead><tr><th>Provider</th><th>Service</th><th>Updated</th></tr></thead>
+      <tbody>
+      {% for l in stale %}
+      <tr><td><a href="/admin/providers/{{ l.provider_id }}">{{ l.provider.name }}</a></td><td>{{ l.service.name }}</td><td class="text-danger">{{ l.price_updated_at|ago }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="empty small">{{ icon("check") }} All prices were updated in the last {{ settings.stale_price_days }} days.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>{{ icon("upload") }} Recent imports</h2><a class="small" href="/admin/import">All imports</a></div>
+    {% if imports %}
+    <ul class="change-list">
+      {% for job, s in imports %}
+      <li>
+        <div><a href="/admin/import/{{ job.id }}"><strong>{{ job.filename }}</strong></a> <span class="badge badge-{{ job.status }}">{{ job.status }}</span></div>
+        <div class="small muted">{{ s.rows or 0 }} rows · {{ s.price_changes or 0 }} changes · {{ s.new_prices or 0 }} new · {{ job.created_at|ago }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="empty small">No spreadsheets uploaded yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}
