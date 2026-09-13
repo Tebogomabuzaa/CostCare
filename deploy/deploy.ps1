@@ -6,12 +6,17 @@
   .\deploy\deploy.ps1
 .EXAMPLE
   .\deploy\deploy.ps1 -Region af-south-1 -Stage prod -AlarmEmail you@example.com
+.EXAMPLE
+  # After editing the secret (e.g. adding DATABASE_URL), make Lambda reload it:
+  .\deploy\deploy.ps1 -SkipBuild -ConfigVersion 2
 #>
 param(
     [string]$Region = "af-south-1",
     [string]$Stage = "prod",
     [string]$AdminEmail = "admin@costcare.local",
     [string]$AlarmEmail = "",
+    [string]$SeedDemoData = "",
+    [string]$ConfigVersion = "",
     [switch]$SkipBuild
 )
 
@@ -63,6 +68,8 @@ Invoke-Native {
 Write-Host "==> Deploying stack $stack to $Region" -ForegroundColor Cyan
 $params = @("StageName=$Stage", "AdminEmail=$AdminEmail")
 if ($AlarmEmail) { $params += "AlarmEmail=$AlarmEmail" }
+if ($SeedDemoData) { $params += "SeedDemoData=$SeedDemoData" }
+if ($ConfigVersion) { $params += "ConfigVersion=$ConfigVersion" }
 Invoke-Native {
     aws cloudformation deploy --template-file $packaged --stack-name $stack --region $Region `
         --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --parameter-overrides $params `
@@ -74,4 +81,5 @@ aws cloudformation describe-stacks --stack-name $stack --region $Region --query 
 Write-Host ""
 Write-Host "Next: add DATABASE_URL (Supabase), OPENAI_API_KEY and GOOGLE_MAPS_API_KEY to the secret costcare/$Stage/app" -ForegroundColor Yellow
 Write-Host "      in the AWS Secrets Manager console (Retrieve secret value -> Edit), keeping SECRET_KEY unchanged." -ForegroundColor Yellow
+Write-Host "      Then reload it: .\deploy\deploy.ps1 -SkipBuild -ConfigVersion <new number>, and check /healthz." -ForegroundColor Yellow
 Write-Host "      Admin login: Secrets Manager -> costcare/$Stage/admin -> Retrieve secret value." -ForegroundColor Yellow

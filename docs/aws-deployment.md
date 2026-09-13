@@ -77,13 +77,32 @@ Options: `-Region af-south-1 -Stage prod -AlarmEmail you@example.com -SkipBuild`
 ### After the first deploy
 
 1. **Admin login:** AWS console → Secrets Manager → `costcare/prod/admin` → *Retrieve secret value*.
-2. **Connect the real database and AI keys:** Secrets Manager → `costcare/prod/app` → *Retrieve secret value* →
-   *Edit*. Fill in:
-   - `DATABASE_URL`: Supabase pooler URI, e.g. `postgresql+psycopg://postgres.<ref>:<password>@<host>:6543/postgres`
-   - `OPENAI_API_KEY`, `GOOGLE_MAPS_API_KEY`, optionally `ADMIN_API_KEY`
-   - Leave `SECRET_KEY` unchanged.
-3. New Lambda instances pick up the values automatically. To apply them immediately, redeploy
-   (`.\deploy\deploy.ps1 -SkipBuild`) or update any function setting.
+2. **Connect Supabase** (see below), and optionally add `OPENAI_API_KEY`, `GOOGLE_MAPS_API_KEY` and
+   `ADMIN_API_KEY` to the same secret.
+3. **Reload settings:** `.\deploy\deploy.ps1 -SkipBuild -ConfigVersion 2` (use a higher number each time you edit
+   the secret), then open `/healthz` on the website URL.
+
+### Connect the Supabase database
+
+1. In Supabase, create a project (or open yours) → **Connect** → **Transaction pooler**, and copy the URI. It
+   looks like `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`.
+   - Use the **pooler** URI, not the direct `db.<ref>.supabase.co` one. The direct connection is IPv6-only, and
+     Lambda outside a VPC can only reach IPv4.
+   - Transaction pooling (port 6543) suits Lambda. CostCare turns off prepared statements for it automatically.
+   - Replace `[YOUR-PASSWORD]` with your database password. If it contains characters like `@`, `:`, `/` or
+     `#`, URL-encode them (e.g. `@` → `%40`).
+   - Add `?sslmode=require` to the end so the connection is always encrypted.
+2. AWS console → **Secrets Manager** → `costcare/prod/app` → **Retrieve secret value** → **Edit**. Paste the URI
+   into `DATABASE_URL` and save. Leave `SECRET_KEY` unchanged.
+3. Reload settings: `.\deploy\deploy.ps1 -SkipBuild -ConfigVersion 2`.
+4. Open `https://<api-id>.execute-api.af-south-1.amazonaws.com/healthz`. It should show `"database": "postgresql"`.
+
+On first start CostCare creates its tables in Supabase, creates the admin from `costcare/prod/admin`, and loads the
+sample providers. To start without sample data, deploy with `-SeedDemoData false` **before** reloading the secret.
+
+**Security:** Supabase serves tables in the `public` schema through its REST API with your project's public
+anon key. CostCare enables **row level security** on its tables at startup, with no policies, so that API can't
+read them (including the `users` table). The app itself connects as the table owner and is unaffected.
 
 **Demo mode:** until `DATABASE_URL` is set, each Lambda instance uses a temporary SQLite database in `/tmp`
 seeded with the sample providers. That's fine for a demo, but admin changes don't persist and can differ

@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional email for error alerts (confirm the SNS subscription email after deploy).
+  ConfigVersion:
+    Type: String
+    Default: "1"
+    Description: Change this value to make Lambda reload settings from Secrets Manager (e.g. after adding DATABASE_URL).
 
 Conditions:
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
@@ -160,6 +164,7 @@ Resources:
           UPLOADS_BUCKET: !Ref UploadsBucket
           SEED_DEMO_DATA: !Ref SeedDemoData
           STAGE: !Ref StageName
+          CONFIG_VERSION: !Ref ConfigVersion
       Policies:
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AppSecret}
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AdminSecret}
@@ -194,6 +199,7 @@ Resources:
           UPLOADS_BUCKET: !Ref UploadsBucket
           SEED_DEMO_DATA: "false"
           STAGE: !Ref StageName
+          CONFIG_VERSION: !Ref ConfigVersion
       Policies:
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AppSecret}
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AdminSecret}

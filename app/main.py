@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from urllib.parse import quote
 
@@ -8,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import AdminRequired, LoginRequired, ensure_admin_account
 from .config import BASE_DIR, settings
-from .database import SessionLocal, init_db
+from .database import SessionLocal, engine, init_db
 from .routers import admin, api, pages
 from .seed import seed_catalogue, seed_demo
 
@@ -62,3 +63,20 @@ async def _admin_required(request: Request, exc: AdminRequired):
         request, "error.html", {"title": "Admin access required", "message": "Your account is not an admin."},
         status_code=403,
     )
+
+
+@app.get("/healthz", tags=["public"], summary="Health check: which database is connected, and record counts")
+def healthz():
+    from sqlalchemy import func, select, text
+
+    from .models import Provider, ProviderService
+
+    body = {"status": "ok", "database": engine.dialect.name, "stage": os.getenv("STAGE", "local")}
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+            body["providers"] = db.scalar(select(func.count(Provider.id))) or 0
+            body["prices"] = db.scalar(select(func.count(ProviderService.id))) or 0
+    except Exception as exc:  # report the failure type only; messages can include host names
+        return JSONResponse({**body, "status": "error", "error": type(exc).__name__}, status_code=503)
+    return body
