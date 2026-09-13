@@ -45,6 +45,15 @@ def test_sync_handler_skips_without_google_key(client):
     assert result["synced"] == 0 and "GOOGLE_MAPS_API_KEY" in result["skipped"]
 
 
+def test_setup_task_creates_schema_and_is_repeatable(client):
+    import lambda_handler
+
+    first = lambda_handler.sync_handler({"task": "setup", "seed_demo_data": True}, _Context())
+    second = lambda_handler.sync_handler({"task": "setup", "seed_demo_data": True}, _Context())
+    assert first["task"] == "setup" and first["database"] == "sqlite"
+    assert first["providers"] > 0 and second["providers"] == first["providers"]
+
+
 def test_secrets_manager_values_are_loaded(monkeypatch, client):
     import lambda_handler
 

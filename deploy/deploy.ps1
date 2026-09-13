@@ -76,6 +76,24 @@ Invoke-Native {
         --tags app=costcare --no-fail-on-empty-changeset
 } "cloudformation deploy"
 
+Write-Host "==> Setting up the database (tables, admin account, catalogue, sample data)" -ForegroundColor Cyan
+$seed = aws cloudformation describe-stacks --stack-name $stack --region $Region --query "Stacks[0].Parameters[?ParameterKey=='SeedDemoData'].ParameterValue | [0]" --output text
+$seedJson = if ($seed -eq "false") { "false" } else { "true" }
+$payload = Join-Path $build "setup-payload.json"
+$setupOut = Join-Path $build "setup-result.json"
+[IO.File]::WriteAllText($payload, ('{"task": "setup", "seed_demo_data": ' + $seedJson + '}'))
+Invoke-Native {
+    aws lambda invoke --function-name "costcare-$Stage-google-sync" --region $Region `
+        --payload "fileb://$payload" --cli-read-timeout 320 $setupOut | Out-Null
+} "database setup invoke"
+$setupResult = Get-Content $setupOut -Raw
+if ($setupResult -match '"errorMessage"') {
+    Write-Host "Database setup FAILED: $setupResult" -ForegroundColor Red
+    Write-Host "Check DATABASE_URL in costcare/$Stage/app, then run: .\deploy\deploy.ps1 -SkipBuild -ConfigVersion <new number>" -ForegroundColor Red
+} else {
+    Write-Host "Database ready: $setupResult" -ForegroundColor Green
+}
+
 aws cloudformation describe-stacks --stack-name $stack --region $Region --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
 
 Write-Host ""

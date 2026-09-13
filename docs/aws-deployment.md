@@ -94,11 +94,26 @@ Options: `-Region af-south-1 -Stage prod -AlarmEmail you@example.com -SkipBuild`
    - Add `?sslmode=require` to the end so the connection is always encrypted.
 2. AWS console → **Secrets Manager** → `costcare/prod/app` → **Retrieve secret value** → **Edit**. Paste the URI
    into `DATABASE_URL` and save. Leave `SECRET_KEY` unchanged.
-3. Reload settings: `.\deploy\deploy.ps1 -SkipBuild -ConfigVersion 2`.
+3. Reload settings: `.\deploy\deploy.ps1 -SkipBuild -ConfigVersion 2`. After deploying, the script runs a one-off
+   **setup task** on the `costcare-prod-google-sync` function, which has a 5-minute timeout. The task:
+   - creates the tables in Supabase,
+   - creates the admin account from `costcare/prod/admin`,
+   - creates the service catalogue,
+   - loads the sample providers, unless you deployed with `-SeedDemoData false`.
+
+   It's safe to run again.
 4. Open `https://<api-id>.execute-api.af-south-1.amazonaws.com/healthz`. It should show `"database": "postgresql"`.
 
-On first start CostCare creates its tables in Supabase, creates the admin from `costcare/prod/admin`, and loads the
-sample providers. To start without sample data, deploy with `-SeedDemoData false` **before** reloading the secret.
+If setup reports `password authentication failed`, fix the password in `DATABASE_URL`:
+- URL-encode special characters.
+- Use the user name `postgres.<project-ref>` exactly as Supabase shows it.
+- Remove the `[` `]` placeholder brackets.
+
+You can reset the password in Supabase → Project Settings → Database.
+
+**Latency:** Lambda runs in Cape Town and Supabase has no Cape Town region, so every query travels to the region
+you chose. To keep requests quick, setup runs outside web requests, and each Lambda instance reuses its database
+connection between requests.
 
 **Security:** Supabase serves tables in the `public` schema through its REST API with your project's public
 anon key. CostCare enables **row level security** on its tables at startup, with no policies, so that API can't
