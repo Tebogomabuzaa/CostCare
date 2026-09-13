@@ -1,5 +1,6 @@
+# Runtime dependencies packaged into the AWS Lambda function (boto3 is provided by the Lambda runtime).
 fastapi>=0.115
-uvicorn[standard]>=0.30
+mangum>=0.17
 jinja2>=3.1
 sqlalchemy>=2.0.30
 python-multipart>=0.0.9
@@ -9,5 +10,3 @@ openpyxl>=3.1
 python-dotenv>=1.0
 openai>=1.40
 psycopg[binary]>=3.2
-mangum>=0.17
-pytest>=8.0

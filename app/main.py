@@ -13,14 +13,22 @@ from .routers import admin, api, pages
 from .seed import seed_catalogue, seed_demo
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def startup() -> None:
+    """Create tables, the first admin, the service catalogue and (optionally) sample data.
+
+    Called by the ASGI lifespan locally, and once per cold start on AWS Lambda.
+    """
     init_db()
     with SessionLocal() as db:
         ensure_admin_account(db)
         seed_catalogue(db)
         if settings.seed_demo_data:
             seed_demo(db)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    startup()
     yield
 
 

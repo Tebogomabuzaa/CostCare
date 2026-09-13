@@ -28,6 +28,8 @@ class Settings:
     currency: str = "ZAR"
     # Prices older than this are flagged as stale in the admin dashboard
     stale_price_days: int = int(os.getenv("STALE_PRICE_DAYS", "90"))
+    # Set on AWS: S3 bucket that archives uploaded price spreadsheets
+    uploads_bucket: str = os.getenv("UPLOADS_BUCKET", "")
 
 
 settings = Settings()

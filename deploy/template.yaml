@@ -1,0 +1,358 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CostCare - AI-powered healthcare price transparency for travellers in South Africa.
+  FastAPI on AWS Lambda behind Amazon API Gateway, with AWS Secrets Manager, Amazon S3,
+  Amazon EventBridge, Amazon CloudWatch, Amazon SNS and AWS X-Ray.
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+    AllowedPattern: "[a-z0-9-]+"
+    Description: Environment name used in resource names (e.g. prod, staging).
+  AdminEmail:
+    Type: String
+    Default: admin@costcare.local
+    Description: Email of the first admin account. Its password is generated in Secrets Manager.
+  SeedDemoData:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Load sample providers when the database is empty.
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Optional email for error alerts (confirm the SNS subscription email after deploy).
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
+
+Resources:
+  # ------------------------------------------------------------------ secrets
+  AppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub costcare/${StageName}/app
+      Description: >
+        CostCare runtime settings. Fill in DATABASE_URL (Supabase Postgres), OPENAI_API_KEY,
+        GOOGLE_MAPS_API_KEY and ADMIN_API_KEY. Do not change SECRET_KEY.
+      GenerateSecretString:
+        SecretStringTemplate: '{"DATABASE_URL": "", "OPENAI_API_KEY": "", "GOOGLE_MAPS_API_KEY": "", "ADMIN_API_KEY": ""}'
+        GenerateStringKey: SECRET_KEY
+        PasswordLength: 64
+        ExcludePunctuation: true
+      Tags:
+        - {Key: app, Value: costcare}
+
+  AdminSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub costcare/${StageName}/admin
+      Description: First CostCare admin account, created on first start.
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"ADMIN_EMAIL": "${AdminEmail}"}'
+        GenerateStringKey: ADMIN_PASSWORD
+        PasswordLength: 24
+        ExcludePunctuation: true
+      Tags:
+        - {Key: app, Value: costcare}
+
+  # ------------------------------------------------------------------ storage
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldSpreadsheets
+            Status: Enabled
+            Transitions:
+              - {StorageClass: STANDARD_IA, TransitionInDays: 30}
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+      Tags:
+        - {Key: app, Value: costcare}
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool: {"aws:SecureTransport": "false"}
+
+  # ------------------------------------------------------------------ logs
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /costcare/${StageName}/web
+      RetentionInDays: 30
+
+  SyncLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /costcare/${StageName}/google-sync
+      RetentionInDays: 30
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /costcare/${StageName}/api-access
+      RetentionInDays: 30
+
+  # ------------------------------------------------------------------ API + compute
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: CostCare website and REST API
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latencyMs":"$context.responseLatency","integrationLatencyMs":"$context.integrationLatency","userAgent":"$context.identity.userAgent"}'
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 200
+        ThrottlingRateLimit: 100
+      Tags:
+        app: costcare
+
+  WebFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub costcare-${StageName}-web
+      Description: CostCare web UI and REST API (FastAPI via Mangum)
+      CodeUri: ../build/lambda
+      Handler: lambda_handler.handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 29
+      Tracing: Active
+      LoggingConfig:
+        LogGroup: !Ref WebLogGroup
+        LogFormat: Text
+      Environment:
+        Variables:
+          APP_SECRET_ARNS: !Join [",", [!Ref AppSecret, !Ref AdminSecret]]
+          DATABASE_URL: sqlite:////tmp/costcare.db
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          SEED_DEMO_DATA: !Ref SeedDemoData
+          STAGE: !Ref StageName
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AppSecret}
+        - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AdminSecret}
+        - S3WritePolicy: {BucketName: !Ref UploadsBucket}
+      Events:
+        Website:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+      Tags:
+        app: costcare
+
+  GoogleSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub costcare-${StageName}-google-sync
+      Description: Daily refresh of Google Business Profile ratings, reviews and locations
+      CodeUri: ../build/lambda
+      Handler: lambda_handler.sync_handler
+      Runtime: python3.12
+      Architectures: [x86_64]
+      MemorySize: 512
+      Timeout: 300
+      Tracing: Active
+      LoggingConfig:
+        LogGroup: !Ref SyncLogGroup
+        LogFormat: Text
+      Environment:
+        Variables:
+          APP_SECRET_ARNS: !Join [",", [!Ref AppSecret, !Ref AdminSecret]]
+          DATABASE_URL: sqlite:////tmp/costcare.db
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          SEED_DEMO_DATA: "false"
+          STAGE: !Ref StageName
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AppSecret}
+        - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AdminSecret}
+      Events:
+        DailySync:
+          Type: Schedule
+          Properties:
+            Name: !Sub costcare-${StageName}-daily-google-sync
+            Description: Refresh Google Business Profile data every day at 03:00 SAST
+            Schedule: cron(0 1 * * ? *)
+            Enabled: true
+      Tags:
+        app: costcare
+
+  # ------------------------------------------------------------------ monitoring
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub costcare-${StageName}-alerts
+      Tags:
+        - {Key: app, Value: costcare}
+
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  WebErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub costcare-${StageName}-web-errors
+      AlarmDescription: The CostCare web Lambda function is throwing errors.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - {Name: FunctionName, Value: !Ref WebFunction}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub costcare-${StageName}-api-5xx
+      AlarmDescription: API Gateway is returning 5xx errors to users.
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - {Name: ApiId, Value: !Ref HttpApi}
+        - {Name: Stage, Value: $default}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+
+  ApiLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub costcare-${StageName}-api-latency-p95
+      AlarmDescription: 95th percentile API latency is above 3 seconds.
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - {Name: ApiId, Value: !Ref HttpApi}
+        - {Name: Stage, Value: $default}
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 3000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+
+  GoogleSyncErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub costcare-${StageName}-google-sync-errors
+      AlarmDescription: The daily Google Business Profile sync failed.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - {Name: FunctionName, Value: !Ref GoogleSyncFunction}
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub CostCare-${StageName}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {"type": "text", "x": 0, "y": 0, "width": 24, "height": 2,
+             "properties": {"markdown": "# CostCare (${StageName})\nServerless healthcare price search: Amazon API Gateway -> AWS Lambda (FastAPI) - Secrets Manager - S3 - EventBridge - X-Ray"}},
+            {"type": "metric", "x": 0, "y": 2, "width": 8, "height": 6,
+             "properties": {"title": "API requests and errors", "region": "${AWS::Region}", "stat": "Sum", "period": 300, "view": "timeSeries",
+                            "metrics": [["AWS/ApiGateway", "Count", "ApiId", "${HttpApi}", "Stage", "$default"],
+                                        [".", "4xx", ".", ".", ".", "."],
+                                        [".", "5xx", ".", ".", ".", "."]]}},
+            {"type": "metric", "x": 8, "y": 2, "width": 8, "height": 6,
+             "properties": {"title": "API latency (ms)", "region": "${AWS::Region}", "period": 300, "view": "timeSeries",
+                            "metrics": [["AWS/ApiGateway", "Latency", "ApiId", "${HttpApi}", "Stage", "$default", {"stat": "p50", "label": "p50"}],
+                                        ["...", {"stat": "p95", "label": "p95"}]]}},
+            {"type": "metric", "x": 16, "y": 2, "width": 8, "height": 6,
+             "properties": {"title": "Web Lambda invocations, errors, throttles", "region": "${AWS::Region}", "stat": "Sum", "period": 300, "view": "timeSeries",
+                            "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${WebFunction}"],
+                                        [".", "Errors", ".", "."],
+                                        [".", "Throttles", ".", "."]]}},
+            {"type": "metric", "x": 0, "y": 8, "width": 8, "height": 6,
+             "properties": {"title": "Web Lambda duration (ms)", "region": "${AWS::Region}", "period": 300, "view": "timeSeries",
+                            "metrics": [["AWS/Lambda", "Duration", "FunctionName", "${WebFunction}", {"stat": "Average", "label": "avg"}],
+                                        ["...", {"stat": "p95", "label": "p95"}]]}},
+            {"type": "metric", "x": 8, "y": 8, "width": 8, "height": 6,
+             "properties": {"title": "Daily Google sync", "region": "${AWS::Region}", "stat": "Sum", "period": 86400, "view": "bar",
+                            "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "${GoogleSyncFunction}"],
+                                        [".", "Errors", ".", "."]]}},
+            {"type": "alarm", "x": 16, "y": 8, "width": 8, "height": 6,
+             "properties": {"title": "Alarms", "alarms": ["${WebErrorsAlarm.Arn}", "${Api5xxAlarm.Arn}", "${ApiLatencyAlarm.Arn}", "${GoogleSyncErrorsAlarm.Arn}"]}},
+            {"type": "log", "x": 0, "y": 14, "width": 24, "height": 7,
+             "properties": {"title": "Recent API requests", "region": "${AWS::Region}", "view": "table",
+                            "query": "SOURCE '${ApiAccessLogGroup}' | fields @timestamp, method, path, status, latencyMs | sort @timestamp desc | limit 25"}}
+          ]
+        }
+
+Outputs:
+  WebsiteUrl:
+    Description: CostCare website (API Gateway endpoint)
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/
+  ApiDocsUrl:
+    Description: Interactive API documentation
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/docs
+  AppSecretName:
+    Description: Add DATABASE_URL, OPENAI_API_KEY and GOOGLE_MAPS_API_KEY to this secret
+    Value: !Sub costcare/${StageName}/app
+  AdminSecretName:
+    Description: Generated admin email and password
+    Value: !Sub costcare/${StageName}/admin
+  UploadsBucketName:
+    Description: S3 bucket archiving uploaded price spreadsheets
+    Value: !Ref UploadsBucket
+  WebFunctionName:
+    Value: !Ref WebFunction
+  GoogleSyncFunctionName:
+    Value: !Ref GoogleSyncFunction
+  DashboardUrl:
+    Description: CloudWatch dashboard
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/CostCare-${StageName}

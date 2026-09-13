@@ -5,7 +5,8 @@
   <div>
     <a href="/admin/import" class="small">← Imports</a>
     <h1>{{ job.filename }}</h1>
-    <p class="muted">Uploaded {{ job.created_at|ago }} · <span class="badge badge-{{ job.status }}">{{ job.status }}</span></p>
+    <p class="muted">Uploaded {{ job.created_at|ago }} · <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
+      {% if summary.archived_to %} · Original archived to Amazon S3 <code>{{ summary.archived_to }}</code>{% endif %}</p>
   </div>
 </div>
 

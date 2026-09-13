@@ -7,7 +7,37 @@ current from an admin dashboard or an Excel upload.
 
 Built with **Python / FastAPI**, SQLAlchemy (SQLite locally, **Supabase Postgres** in production),
 **OpenAI** for query understanding, the **Google Places API** for Google Business Profile reviews and
-locations, and **openpyxl** for Excel import/export.
+locations, and **openpyxl** for Excel import/export. It runs **serverless on AWS** in the Cape Town region
+(`af-south-1`).
+
+---
+
+## AWS architecture
+
+```mermaid
+flowchart LR
+    user(["Travellers & admins"]) -->|HTTPS| apigw["Amazon API Gateway<br/>HTTP API"]
+    apigw --> web["AWS Lambda<br/>FastAPI app"]
+    eb["Amazon EventBridge<br/>daily schedule"] --> sync["AWS Lambda<br/>Google sync"]
+    web --> sm[("AWS Secrets Manager")]
+    sync --> sm
+    web --> s3[("Amazon S3<br/>spreadsheet archive")]
+    web --> db[("Supabase Postgres")]
+    sync --> db
+    web -. logs · metrics · traces .-> cw["Amazon CloudWatch + AWS X-Ray"]
+    sync -.-> cw
+    cw --> sns["Amazon SNS alerts"]
+```
+
+- **API Gateway + Lambda** run the FastAPI website and API, with no servers to manage.
+- **Secrets Manager** holds the session key, database URL, API keys and the generated admin password.
+- **S3** keeps an encrypted archive of every uploaded price spreadsheet.
+- **EventBridge** triggers a daily refresh of Google reviews, ratings and locations.
+- **CloudWatch** provides a dashboard, logs and alarms (errors, 5xx, latency), **X-Ray** traces requests, and
+  **SNS** sends email alerts.
+
+Everything is infrastructure-as-code in [`deploy/template.yaml`](deploy/template.yaml) and deploys with
+`.\deploy\deploy.ps1`. See [docs/aws-deployment.md](docs/aws-deployment.md) for details, costs and setup.
 
 ---
 
@@ -182,6 +212,9 @@ app/
   routers/             pages.py (customer UI), api.py (public API), admin.py (admin UI + API)
   templates/           Jinja2 pages (admin/ for the dashboard)
   static/              CSS and JS (finder, admin)
+lambda_handler.py      AWS Lambda entry points (web + scheduled Google sync)
+deploy/                CloudFormation/SAM template and deploy script
+docs/                  AWS deployment guide and screenshots
 manage.py              CLI
 tests/                 pytest suite
 ```

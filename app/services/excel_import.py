@@ -225,10 +225,13 @@ def build_preview(db: Session, rows: list[dict]) -> dict:
     return summary
 
 
-def create_import_job(db: Session, content: bytes, filename: str, user: User | None) -> ImportJob:
+def create_import_job(db: Session, content: bytes, filename: str, user: User | None,
+                      archive_key: str | None = None) -> ImportJob:
     parsed = parse_rows(read_table(content, filename))
     summary = build_preview(db, parsed.rows)
     summary["errors"] = len(parsed.errors)
+    if archive_key:
+        summary["archived_to"] = archive_key
     job = ImportJob(
         filename=filename,
         rows_json=json.dumps(parsed.rows),

@@ -35,6 +35,7 @@ from ..schemas import DiscoverIn, GoogleLinkIn, ListingIn, ListingPatch, Provide
 from ..serializers import listing_dict, provider_dict
 from ..services import excel_import, google_places
 from ..services.google_places import GooglePlacesError
+from ..services.storage import archive_upload
 from ..services.pricing import get_or_create_service, upsert_listing
 from ..templating import flash, templates
 from ..utils import PROVIDER_TYPES, SERVICE_CATEGORIES, parse_price, slugify, unique_slug
@@ -409,7 +410,8 @@ def import_upload(request: Request, file: UploadFile = File(...), db: Session = 
         flash(request, "Please upload an .xlsx or .csv file.", "error")
         return _redirect("/admin/import")
     try:
-        job = excel_import.create_import_job(db, content, file.filename or "upload.xlsx", admin)
+        job = excel_import.create_import_job(db, content, file.filename or "upload.xlsx", admin,
+                                             archive_key=archive_upload(content, file.filename or "upload.xlsx"))
     except ValueError as exc:
         flash(request, str(exc), "error")
         return _redirect("/admin/import")
@@ -672,7 +674,8 @@ def api_import_excel(file: UploadFile = File(...), db: Session = Depends(get_db)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "File is larger than 10 MB")
     try:
-        job = excel_import.create_import_job(db, content, file.filename or "upload.xlsx", admin)
+        job = excel_import.create_import_job(db, content, file.filename or "upload.xlsx", admin,
+                                             archive_key=archive_upload(content, file.filename or "upload.xlsx"))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"job_id": job.id, "status": job.status, "summary": json.loads(job.summary_json),
