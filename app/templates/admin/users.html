@@ -1,0 +1,50 @@
+{% extends "admin/_layout.html" %}
+{% from "_icons.html" import icon %}
+{% block admin %}
+<div class="admin-head">
+  <div>
+    <h1>Users</h1>
+    <p class="muted">{{ users|length }} account{{ 's' if users|length != 1 }}. Create a one-time password reset link for anyone who can't log in.</p>
+  </div>
+</div>
+
+{% if reset_link %}
+<section class="card">
+  <div class="card-head"><h2>{{ icon("check") }} Reset link for {{ reset_for.email }}</h2></div>
+  <p class="small muted">Send this to the user privately. It works once, expires in 1 hour, and won't be shown again.</p>
+  <div class="inline-form">
+    <input id="reset-link" type="text" readonly value="{{ reset_link }}" aria-label="Password reset link">
+    <button type="button" class="btn btn-primary" data-copy="#reset-link">Copy</button>
+  </div>
+</section>
+{% endif %}
+
+<form class="card filter-bar" method="get">
+  <input name="q" value="{{ q }}" placeholder="Search by email or name" aria-label="Search users">
+  <button class="btn btn-outline">Search</button>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>User</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td><strong>{{ u.email }}</strong>{% if u.name %}<div class="small muted">{{ u.name }}</div>{% endif %}</td>
+        <td>{% if u.is_admin %}<span class="badge badge-partner">Admin</span>{% else %}<span class="badge">Traveller</span>{% endif %}</td>
+        <td class="small muted">{{ u.created_at|ago }}</td>
+        <td class="row-actions">
+          <form method="post" action="/admin/users/{{ u.id }}/reset-link" data-confirm="Create a password reset link for {{ u.email }}? Any earlier link stops working.">
+            <button class="btn btn-outline btn-sm">{{ icon("refresh") }} Create reset link</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">No users found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -6,6 +6,7 @@
     <h1>Create your free account</h1>
     <p class="muted">Save providers, track planned treatment costs and get notified when prices change.</p>
     <form method="post" action="/signup" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label class="field"><span>Name</span><input name="name" required autocomplete="name" autofocus></label>
       <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
       <label class="field"><span>Password</span><input name="password" type="password" minlength="8" required autocomplete="new-password"><small class="muted">At least 8 characters</small></label>

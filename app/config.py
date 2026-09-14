@@ -30,6 +30,10 @@ class Settings:
     stale_price_days: int = int(os.getenv("STALE_PRICE_DAYS", "90"))
     # Set on AWS: S3 bucket that archives uploaded price spreadsheets
     uploads_bucket: str = os.getenv("UPLOADS_BUCKET", "")
+    # Mark the session cookie Secure (HTTPS only). On by default on AWS Lambda, off for local http://
+    session_https_only: bool = _bool("SESSION_HTTPS_ONLY", bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")))
+    # Sender for password-reset emails via Amazon SES (a verified SES identity). Blank = email off
+    mail_from: str = os.getenv("MAIL_FROM", "")
 
 
 settings = Settings()

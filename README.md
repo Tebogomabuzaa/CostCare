@@ -263,7 +263,9 @@ The tests use a temporary SQLite database and a mocked Google API, so no keys ar
 ## Before going live
 - Set strong `SECRET_KEY` / admin credentials, serve over HTTPS, and run with
   `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2` (no `--reload`).
-- Add CSRF tokens to forms if you embed the site in other domains. Cookies are `SameSite=Lax` by default.
+- Security is built in: CSRF tokens, login throttling, secure session cookies on AWS, change password, and
+  admin-issued reset links. Email-based password reset turns on once `MAIL_FROM` is set to a verified Amazon SES
+  sender. See [docs/aws-deployment.md](docs/aws-deployment.md#security).
 - Replace the sample data with real providers. Get written confirmation from providers for the prices you
   publish, and keep the “estimates only” disclaimer.
 - Background Google syncs run in-process; for many providers, move them to a scheduled job or task queue.

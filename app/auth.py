@@ -1,14 +1,22 @@
 import hashlib
 import hmac
 import secrets
+from datetime import timedelta
 
 from fastapi import Depends, Request
-from sqlalchemy import select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import User
+from .models import LoginAttempt, PasswordResetToken, User, utcnow
+
+MAX_FAILED_LOGINS_PER_EMAIL = 5
+MAX_FAILED_LOGINS_PER_IP = 20
+LOGIN_LOCKOUT_WINDOW = timedelta(minutes=15)
+MAX_RESET_REQUESTS_PER_EMAIL = 3
+MAX_RESET_REQUESTS_PER_IP = 10
+RESET_TOKEN_TTL = timedelta(hours=1)
 
 _ITERATIONS = 240_000
 
@@ -75,3 +83,92 @@ def ensure_admin_account(db: Session) -> None:
             )
         )
         db.commit()
+
+
+# --------------------------------------------------------------------------- passwords
+
+
+def password_problem(password: str, confirm: str) -> str | None:
+    if len(password) < 8:
+        return "Password must be at least 8 characters."
+    if len(password) > 128:
+        return "Password must be 128 characters or fewer."
+    if password != confirm:
+        return "The two passwords don't match."
+    return None
+
+
+# --------------------------------------------------------------------------- rate limiting
+
+
+def client_ip(request: Request) -> str:
+    return (request.client.host if request.client else "") or "unknown"
+
+
+def _recent_count(db: Session, kind: str, since, **match) -> int:
+    stmt = select(func.count(LoginAttempt.id)).where(LoginAttempt.kind == kind, LoginAttempt.created_at >= since)
+    if kind == "login":
+        stmt = stmt.where(LoginAttempt.succeeded.is_(False))
+    for column, value in match.items():
+        stmt = stmt.where(getattr(LoginAttempt, column) == value)
+    return db.scalar(stmt) or 0
+
+
+def too_many_failed_logins(db: Session, email: str, ip: str) -> bool:
+    since = utcnow() - LOGIN_LOCKOUT_WINDOW
+    return (_recent_count(db, "login", since, email=email) >= MAX_FAILED_LOGINS_PER_EMAIL
+            or _recent_count(db, "login", since, ip=ip) >= MAX_FAILED_LOGINS_PER_IP)
+
+
+def record_login_attempt(db: Session, email: str, ip: str, succeeded: bool) -> None:
+    db.add(LoginAttempt(kind="login", email=email, ip=ip[:64], succeeded=succeeded))
+    if succeeded:  # a successful login clears earlier failures for that account
+        db.execute(delete(LoginAttempt).where(
+            LoginAttempt.kind == "login", LoginAttempt.email == email, LoginAttempt.succeeded.is_(False)))
+    db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < utcnow() - timedelta(days=1)))
+    db.commit()
+
+
+def too_many_reset_requests(db: Session, email: str, ip: str) -> bool:
+    since = utcnow() - timedelta(hours=1)
+    return (_recent_count(db, "reset", since, email=email) >= MAX_RESET_REQUESTS_PER_EMAIL
+            or _recent_count(db, "reset", since, ip=ip) >= MAX_RESET_REQUESTS_PER_IP)
+
+
+def record_reset_request(db: Session, email: str, ip: str) -> None:
+    db.add(LoginAttempt(kind="reset", email=email, ip=ip[:64], succeeded=True))
+    db.commit()
+
+
+# --------------------------------------------------------------------------- password reset links
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_password_reset_token(db: Session, user: User, by_admin: bool = False) -> str:
+    """Create a one-time token (valid 1 hour) and invalidate any earlier unused ones."""
+    token = secrets.token_urlsafe(32)
+    db.execute(update(PasswordResetToken)
+               .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+               .values(used_at=utcnow()))
+    db.add(PasswordResetToken(user_id=user.id, token_hash=_hash_token(token),
+                              expires_at=utcnow() + RESET_TOKEN_TTL, created_by_admin=by_admin))
+    db.commit()
+    return token
+
+
+def find_valid_reset_token(db: Session, token: str) -> PasswordResetToken | None:
+    if not token:
+        return None
+    row = db.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == _hash_token(token)))
+    if row is None or row.used_at is not None or row.expires_at < utcnow():
+        return None
+    return row
+
+
+def invalidate_reset_tokens(db: Session, user: User) -> None:
+    db.execute(update(PasswordResetToken)
+               .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+               .values(used_at=utcnow()))

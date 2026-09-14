@@ -47,6 +47,17 @@
     if (form && !window.confirm(form.dataset.confirm)) e.preventDefault();
   });
 
+  // CSRF: every POST form and fetch call sends this session's token
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  document.querySelectorAll('form').forEach((form) => {
+    if (form.method.toLowerCase() !== 'post' || form.querySelector('input[name="csrf_token"]')) return;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'csrf_token';
+    input.value = csrfToken;
+    form.appendChild(input);
+  });
+
   const loginRedirect = () => {
     window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
   };
@@ -54,7 +65,7 @@
   async function postJSON(url, body) {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-Token': csrfToken },
       body: body ? JSON.stringify(body) : null,
     });
     if (res.status === 401) { loginRedirect(); throw new Error('login'); }
@@ -91,5 +102,5 @@
     }
   });
 
-  window.CostCare = { postJSON };
+  window.CostCare = { postJSON, csrfToken };
 })();

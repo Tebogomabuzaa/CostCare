@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from .config import BASE_DIR, settings
 from .database import SessionLocal
 from .models import Notification, User
+from .security import get_csrf_token
 from .utils import format_zar, price_range_label, time_ago
 
 
@@ -28,6 +29,7 @@ def _context(request: Request) -> dict:
         "flashes": flashes,
         "settings": settings,
         "path": request.url.path,
+        "csrf_token": get_csrf_token(request) if "session" in request.scope else "",
     }
 
 

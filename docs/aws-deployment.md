@@ -123,6 +123,28 @@ read them (including the `users` table). The app itself connects as the table ow
 seeded with the sample providers. That's fine for a demo, but admin changes don't persist and can differ
 between instances. Set `DATABASE_URL` for real use.
 
+## Security
+
+- **Cookies:** the login session cookie is `Secure`, `HttpOnly` and `SameSite=Lax` on AWS.
+- **CSRF protection:** every form and browser API call must carry the session's CSRF token. Scripts that use
+  `X-Admin-Token` are exempt.
+- **Login throttling:** after 5 failed attempts for one email, or 20 from one IP address, within 15 minutes,
+  further attempts are blocked for that window. Attempts are stored in the database, so the limit applies across
+  all Lambda instances.
+- **Passwords:** stored as PBKDF2-SHA256 hashes. Users change them under **Dashboard → Change password**.
+- **Password reset:** admins create a one-time link under **Admin → Users**. Links work once and expire after
+  1 hour, and only a hash of the token is stored.
+- **Reset by email:** users can reset by email once a sender is configured:
+  1. Verify a sender in Amazon SES in `af-south-1`. A domain you own is best.
+  2. Request SES production access.
+  3. Add `MAIL_FROM` (e.g. `no-reply@yourdomain.co.za`) to the `costcare/prod/app` secret.
+  4. Reload settings with `-ConfigVersion`.
+- **Supabase:** row level security is enabled on every CostCare table.
+- **Alerts:** CloudWatch alarms email the address you pass as `-AlarmEmail`. Confirm the subscription email AWS
+  sends.
+- **Key check:** to test the OpenAI and Google keys, invoke `costcare-prod-google-sync` with
+  `{"task": "check-integrations"}`.
+
 ## Costs
 
 For a low-traffic launch this is roughly **US$1–2 per month**:

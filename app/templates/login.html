@@ -6,9 +6,11 @@
     <h1>Welcome back</h1>
     <p class="muted">Log in to see saved providers, cost plans and price alerts.</p>
     <form method="post" action="/login" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ next }}">
       <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email" autofocus></label>
       <label class="field"><span>Password</span><input name="password" type="password" required autocomplete="current-password"></label>
+      <a class="small" href="/forgot-password">Forgot your password?</a>
       <button class="btn btn-primary btn-block btn-lg">Log in</button>
     </form>
     <p class="small muted center">New to CostCare? <a href="/signup">Create a free account</a></p>

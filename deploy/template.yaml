@@ -169,6 +169,11 @@ Resources:
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AppSecret}
         - AWSSecretsManagerGetSecretValuePolicy: {SecretArn: !Ref AdminSecret}
         - S3WritePolicy: {BucketName: !Ref UploadsBucket}
+        - Statement:
+            - Sid: SendPasswordResetEmails
+              Effect: Allow
+              Action: ses:SendEmail
+              Resource: "*"
       Events:
         Website:
           Type: HttpApi

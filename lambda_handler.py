@@ -63,7 +63,35 @@ def handler(event, context):
 def sync_handler(event, context):
     if isinstance(event, dict) and event.get("task") == "setup":
         return _setup(bool(event.get("seed_demo_data", True)))
+    if isinstance(event, dict) and event.get("task") == "check-integrations":
+        return _check_integrations()
     return _sync_google()
+
+
+def _check_integrations() -> dict:
+    """Make one small real call to OpenAI and Google Places to confirm the configured keys work."""
+    from app.config import settings
+
+    result = {"task": "check-integrations", "openai": "not configured", "google_places": "not configured",
+              "email": "configured" if settings.mail_from else "not configured"}
+    if settings.openai_api_key:
+        try:
+            from openai import OpenAI
+
+            OpenAI(api_key=settings.openai_api_key, timeout=15).models.retrieve(settings.openai_model)
+            result["openai"] = "ok"
+        except Exception as exc:  # type only: OpenAI messages can echo part of the key
+            result["openai"] = f"error: {type(exc).__name__}"
+    if settings.google_maps_api_key:
+        try:
+            from app.services import google_places
+
+            google_places.search_text("hospital Cape Town", max_results=1)
+            result["google_places"] = "ok"
+        except Exception as exc:  # Google's message explains e.g. a disabled API or restricted key
+            result["google_places"] = f"error: {str(exc)[:300]}"
+    log.info(json.dumps(result))
+    return result
 
 
 def _setup(seed_demo_data: bool) -> dict:

@@ -11,6 +11,7 @@ from .auth import AdminRequired, LoginRequired, ensure_admin_account
 from .config import BASE_DIR, settings
 from .database import SessionLocal, engine, init_db
 from .routers import admin, api, pages
+from .security import CSRFError
 from .seed import seed_catalogue, seed_demo
 
 
@@ -40,7 +41,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, same_site="lax", max_age=60 * 60 * 24 * 14)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    same_site="lax",
+    https_only=settings.session_https_only,
+    max_age=60 * 60 * 24 * 14,
+)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 
 app.include_router(pages.router)
@@ -62,6 +69,18 @@ async def _admin_required(request: Request, exc: AdminRequired):
         return JSONResponse({"detail": "Admin access required."}, status_code=403)
     return pages.templates.TemplateResponse(
         request, "error.html", {"title": "Admin access required", "message": "Your account is not an admin."},
+        status_code=403,
+    )
+
+
+@app.exception_handler(CSRFError)
+async def _csrf_failed(request: Request, exc: CSRFError):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Security check failed. Refresh the page and try again."}, status_code=403)
+    return pages.templates.TemplateResponse(
+        request, "error.html",
+        {"title": "Please try again",
+         "message": "Your session expired or the form was out of date. Go back, refresh the page and submit it again."},
         status_code=403,
     )
 

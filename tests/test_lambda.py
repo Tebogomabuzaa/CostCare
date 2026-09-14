@@ -54,6 +54,15 @@ def test_setup_task_creates_schema_and_is_repeatable(client):
     assert first["providers"] > 0 and second["providers"] == first["providers"]
 
 
+def test_check_integrations_reports_unconfigured_keys(client):
+    import lambda_handler
+
+    result = lambda_handler.sync_handler({"task": "check-integrations"}, _Context())
+    assert result["openai"] == "not configured"
+    assert result["google_places"] == "not configured"
+    assert result["email"] == "not configured"
+
+
 def test_secrets_manager_values_are_loaded(monkeypatch, client):
     import lambda_handler
 

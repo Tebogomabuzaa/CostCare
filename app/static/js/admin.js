@@ -8,7 +8,11 @@
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
         body: body ? JSON.stringify(body) : null,
       });
       const data = await res.json().catch(() => ({}));
@@ -91,6 +95,15 @@
       } catch { /* shown */ }
     });
   }
+
+  // ---- Copy buttons (password reset links)
+  document.querySelectorAll('[data-copy]').forEach((btn) => btn.addEventListener('click', async () => {
+    const input = document.querySelector(btn.dataset.copy);
+    if (!input) return;
+    input.select();
+    try { await navigator.clipboard.writeText(input.value); } catch { document.execCommand('copy'); }
+    toast('Link copied');
+  }));
 
   // ---- Excel dropzone
   const dz = document.querySelector('.dropzone');

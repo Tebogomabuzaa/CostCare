@@ -156,6 +156,17 @@
         </form>
         <form method="post" action="/logout" class="logout-form"><button class="btn btn-ghost btn-sm btn-block">Log out</button></form>
       </section>
+
+      <section class="card" id="security">
+        <div class="card-head"><h2>{{ icon("shield") }} Change password</h2></div>
+        <form method="post" action="/dashboard/password" class="stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="field"><span>Current password</span><input name="current_password" type="password" required autocomplete="current-password"></label>
+          <label class="field"><span>New password</span><input name="new_password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"><small class="muted">At least 8 characters</small></label>
+          <label class="field"><span>Confirm new password</span><input name="confirm_password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></label>
+          <button class="btn btn-primary">Change password</button>
+        </form>
+      </section>
     </aside>
   </div>
 </div>

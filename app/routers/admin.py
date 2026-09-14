@@ -14,7 +14,8 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from ..auth import require_admin
+from ..auth import create_password_reset_token, require_admin
+from ..security import verify_csrf
 from ..config import settings
 from ..database import SessionLocal, get_db
 from ..models import (
@@ -42,8 +43,10 @@ from ..utils import PROVIDER_TYPES, SERVICE_CATEGORIES, parse_price, slugify, un
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", include_in_schema=False, dependencies=[Depends(require_admin)])
-api_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/admin", include_in_schema=False,
+                   dependencies=[Depends(require_admin), Depends(verify_csrf)])
+api_router = APIRouter(prefix="/api/admin", tags=["admin"],
+                       dependencies=[Depends(require_admin), Depends(verify_csrf)])
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -469,6 +472,31 @@ def import_discard(job_id: int, request: Request, db: Session = Depends(get_db))
 def messages_page(request: Request, db: Session = Depends(get_db)):
     items = db.scalars(select(ContactMessage).order_by(ContactMessage.created_at.desc()).limit(200)).all()
     return templates.TemplateResponse(request, "admin/messages.html", {"items": items})
+
+
+def _users(db: Session, q: str = "") -> list[User]:
+    stmt = select(User).order_by(User.created_at.desc()).limit(500)
+    if q:
+        stmt = stmt.where(or_(User.email.ilike(f"%{q}%"), User.name.ilike(f"%{q}%")))
+    return list(db.scalars(stmt))
+
+
+@router.get("/users")
+def users_page(request: Request, q: str = "", db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "admin/users.html", {"users": _users(db, q), "q": q, "reset_link": None})
+
+
+@router.post("/users/{user_id}/reset-link")
+def user_reset_link(user_id: int, request: Request, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None:
+        return _redirect("/admin/users")
+    token = create_password_reset_token(db, user, by_admin=True)
+    link = f"{request.url_for('reset_password_page')}?token={token}"
+    # Rendered directly (not flashed) so the link never goes into the session cookie
+    return templates.TemplateResponse(request, "admin/users.html", {
+        "users": _users(db), "q": "", "reset_for": user, "reset_link": link,
+    })
 
 
 @router.post("/demo/delete")

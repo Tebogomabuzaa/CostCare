@@ -8,10 +8,11 @@ from ..auth import get_current_user, require_user
 from ..database import get_db
 from ..models import Favorite, Notification, PlannedTreatment, Provider, ProviderService, Service, User
 from ..schemas import PlanIn
+from ..security import verify_csrf
 from ..serializers import provider_dict
 from ..services.search import SORTS, Catalog, describe, parse_query, run_search
 
-router = APIRouter(prefix="/api", tags=["public"])
+router = APIRouter(prefix="/api", tags=["public"], dependencies=[Depends(verify_csrf)])
 
 
 @router.get("/search", summary="AI search for procedures, locations and prices in one query")

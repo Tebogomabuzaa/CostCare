@@ -5,11 +5,27 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import delete, distinct, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from ..auth import get_current_user, hash_password, require_user, verify_password
+from ..auth import (
+    client_ip,
+    create_password_reset_token,
+    find_valid_reset_token,
+    get_current_user,
+    hash_password,
+    invalidate_reset_tokens,
+    password_problem,
+    record_login_attempt,
+    record_reset_request,
+    require_user,
+    too_many_failed_logins,
+    too_many_reset_requests,
+    verify_password,
+)
+from ..config import settings
 from ..database import get_db
 from ..models import (
     ContactMessage,
     Favorite,
+    LoginAttempt,
     Notification,
     PlannedTreatment,
     Provider,
@@ -18,11 +34,14 @@ from ..models import (
     Review,
     Service,
     User,
+    utcnow,
 )
+from ..security import verify_csrf
+from ..services import mailer
 from ..templating import flash, templates
 from ..utils import SERVICE_CATEGORIES, parse_price
 
-router = APIRouter(include_in_schema=False)
+router = APIRouter(include_in_schema=False, dependencies=[Depends(verify_csrf)])
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -245,10 +264,18 @@ def login_page(request: Request, next: str = ""):
 @router.post("/login")
 def login(request: Request, email: str = Form(...), password: str = Form(...), next: str = Form(""),
           db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    email = email.strip().lower()
+    ip = client_ip(request)
+    retry_url = f"/login?next={next}" if next else "/login"
+    if too_many_failed_logins(db, email, ip):
+        flash(request, "Too many failed login attempts. Wait 15 minutes and try again, or reset your password.", "error")
+        return _redirect(retry_url)
+    user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(password, user.password_hash):
+        record_login_attempt(db, email, ip, succeeded=False)
         flash(request, "Incorrect email or password.", "error")
-        return _redirect(f"/login?next={next}" if next else "/login")
+        return _redirect(retry_url)
+    record_login_attempt(db, email, ip, succeeded=True)
     request.session["user_id"] = user.id
     return _redirect(_safe_next(next, "/admin" if user.is_admin else "/dashboard"))
 
@@ -283,6 +310,60 @@ def signup(request: Request, name: str = Form(...), email: str = Form(...), pass
 def logout(request: Request):
     request.session.clear()
     return _redirect("/")
+
+
+RESET_SENT_MESSAGE = "If an account exists for that email, we've sent a password reset link. It expires in 1 hour."
+
+
+@router.get("/forgot-password")
+def forgot_password_page(request: Request):
+    return templates.TemplateResponse(request, "forgot_password.html", {"email_enabled": mailer.email_enabled()})
+
+
+@router.post("/forgot-password")
+def forgot_password(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
+    if not mailer.email_enabled():
+        flash(request, "Password reset by email isn't switched on yet. Contact us and an administrator will send "
+                       "you a reset link.", "warning")
+        return _redirect("/forgot-password")
+    email, ip = email.strip().lower(), client_ip(request)
+    if not too_many_reset_requests(db, email, ip):
+        record_reset_request(db, email, ip)
+        user = db.scalar(select(User).where(User.email == email))
+        if user:
+            token = create_password_reset_token(db, user)
+            mailer.send_password_reset(user.email, f"{request.url_for('reset_password_page')}?token={token}")
+    # Same answer whether or not the account exists (or the limit was hit), so emails can't be probed
+    flash(request, RESET_SENT_MESSAGE)
+    return _redirect("/login")
+
+
+@router.get("/reset-password", name="reset_password_page")
+def reset_password_page(request: Request, token: str = "", db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "reset_password.html", {
+        "token": token, "valid": find_valid_reset_token(db, token) is not None,
+    })
+
+
+@router.post("/reset-password")
+def reset_password(request: Request, token: str = Form(...), new_password: str = Form(...),
+                   confirm_password: str = Form(...), db: Session = Depends(get_db)):
+    row = find_valid_reset_token(db, token)
+    if row is None:
+        flash(request, "This reset link is invalid, already used, or expired. Request a new one.", "error")
+        return _redirect("/forgot-password")
+    problem = password_problem(new_password, confirm_password)
+    if problem:
+        flash(request, problem, "error")
+        return _redirect(f"/reset-password?token={token}")
+    user = db.get(User, row.user_id)
+    user.password_hash = hash_password(new_password)
+    row.used_at = utcnow()
+    invalidate_reset_tokens(db, user)
+    db.execute(delete(LoginAttempt).where(LoginAttempt.kind == "login", LoginAttempt.email == user.email))
+    db.commit()
+    flash(request, "Password updated. You can log in with your new password.")
+    return _redirect("/login")
 
 
 # --------------------------------------------------------------------------- dashboard
@@ -376,3 +457,21 @@ def mark_notifications_read(db: Session = Depends(get_db), user: User = Depends(
         n.is_read = True
     db.commit()
     return _redirect("/dashboard#notifications")
+
+
+@router.post("/dashboard/password")
+def change_password(request: Request, current_password: str = Form(...), new_password: str = Form(...),
+                    confirm_password: str = Form(...), db: Session = Depends(get_db),
+                    user: User = Depends(require_user)):
+    if not verify_password(current_password, user.password_hash):
+        flash(request, "Your current password is incorrect.", "error")
+        return _redirect("/dashboard#security")
+    problem = password_problem(new_password, confirm_password)
+    if problem:
+        flash(request, problem, "error")
+        return _redirect("/dashboard#security")
+    user.password_hash = hash_password(new_password)
+    invalidate_reset_tokens(db, user)
+    db.commit()
+    flash(request, "Password changed.")
+    return _redirect("/dashboard#security")
