@@ -61,3 +61,39 @@ def test_empty_query_lists_everything(client):
     data = client.get("/api/search").json()
     assert data["count"] > 50
     assert data["price_bounds"][0] < data["price_bounds"][1]
+
+
+def test_ai_pauses_after_account_error_and_falls_back_to_rules(monkeypatch, db):
+    import dataclasses
+    import sys
+    import types
+
+    from app.services import search
+
+    calls = []
+
+    class QuotaError(Exception):
+        status_code = 429
+        code = "insufficient_quota"
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            raise QuotaError("You have no credits remaining")
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = types.SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setattr(search, "settings", dataclasses.replace(search.settings, openai_api_key="test-key"))
+    monkeypatch.setattr(search, "_ai_paused_until", 0.0)
+    search._ai_cache.clear()
+    catalog = _catalog(db)
+
+    assert search.parse_with_ai("mri scan in durban", catalog) is None
+    assert search.parse_with_ai("root canal in cape town", catalog) is None
+    assert len(calls) == 1  # the second search skipped OpenAI while paused
+
+    intent = search.parse_query("MRI scan in Durban", catalog)
+    assert intent.parser == "rules" and intent.service_names[0] == "MRI scan"

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
 
@@ -230,6 +231,18 @@ def _service_score(text: str, service: Service) -> float:
 # --------------------------------------------------------------------------- AI parser
 
 _ai_cache: dict[str, dict] = {}
+# After an account-level OpenAI error (no credits, invalid key) skip AI for a while, so every search
+# doesn't wait on calls that are bound to fail.
+AI_PAUSE_SECONDS = 300
+_ai_paused_until = 0.0
+
+
+def _is_account_error(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    code = str(getattr(exc, "code", "") or "")
+    return (status in (401, 403)
+            or code in {"insufficient_quota", "credit_balance_exhausted", "invalid_api_key"}
+            or (status == 429 and "quota" in str(exc).lower()))
 
 _SYSTEM_PROMPT = """You turn healthcare price searches from travellers and residents in South Africa into JSON filters.
 Rules:
@@ -247,7 +260,8 @@ Respond with JSON only."""
 
 
 def parse_with_ai(query: str, catalog: Catalog) -> dict | None:
-    if not settings.openai_api_key:
+    global _ai_paused_until
+    if not settings.openai_api_key or time.monotonic() < _ai_paused_until:
         return None
     key = query.strip().lower()
     if key in _ai_cache:
@@ -255,7 +269,7 @@ def parse_with_ai(query: str, catalog: Catalog) -> dict | None:
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=settings.openai_api_key, timeout=10)
+        client = OpenAI(api_key=settings.openai_api_key, timeout=8, max_retries=1)
         payload = {
             "catalogue": [{"name": s.name, "category": s.category} for s in catalog.services],
             "categories": SERVICE_CATEGORIES,
@@ -272,8 +286,14 @@ def parse_with_ai(query: str, catalog: Catalog) -> dict | None:
             ],
         )
         data = json.loads(response.choices[0].message.content or "{}")
-    except Exception as exc:  # network, auth, bad JSON: fall back to rules
-        log.warning("AI query parsing failed, using rule-based parser: %s", exc)
+    except Exception as exc:  # network, auth, quota, bad JSON: fall back to rules
+        if _is_account_error(exc):
+            _ai_paused_until = time.monotonic() + AI_PAUSE_SECONDS
+            # Log the type and code only: auth error messages can echo part of the API key
+            log.warning("OpenAI unavailable (%s, %s); using rule-based search for %d minutes",
+                        type(exc).__name__, getattr(exc, "code", ""), AI_PAUSE_SECONDS // 60)
+        else:
+            log.warning("AI query parsing failed, using rule-based parser: %s", exc)
         return None
     if len(_ai_cache) > 500:
         _ai_cache.clear()
